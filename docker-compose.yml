@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: eprid-postgres
+    environment:
+      POSTGRES_DB: eprid
+      POSTGRES_USER: eprid
+      POSTGRES_PASSWORD: eprid
+    ports:
+      - "5432:5432"
+    volumes:
+      - eprid_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eprid -d eprid"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  eprid_pgdata:

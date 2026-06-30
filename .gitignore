@@ -1,0 +1,12 @@
+.gradle/
+build/
+uploads/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+*.iws
+.DS_Store
+application-local.yml
+*.env
