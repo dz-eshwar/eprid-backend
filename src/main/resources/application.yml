@@ -68,7 +68,7 @@ app:
   storage:
     base-path: ${STORAGE_PATH:./uploads}
   cors:
-    allowed-origins: "#{'${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}'.split(',')}"
+    allowed-origins: "#{'${CORS_ALLOWED_ORIGINS:https://eprid.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:8080}'.split(',')}"
   anthropic:
     api-key: ${ANTHROPIC_API_KEY:}
     model: ${ANTHROPIC_MODEL:claude-haiku-4-5-20251001}
