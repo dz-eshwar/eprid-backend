@@ -21,7 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 class SecurityConfig(
     private val jwtAuthFilter: JwtAuthFilter,
     private val authenticationProvider: AuthenticationProvider,
-    @Value("\${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:8080},https://eprid.vercel.app")
+    @Value("\${app.cors.allowed-origins}")
     private val allowedOrigins: List<String>
 ) {
 
