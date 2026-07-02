@@ -51,8 +51,8 @@ class VerificationCheckService(
 
     @Transactional(readOnly = true)
     fun getCheck(checkId: String, requestedBy: User): VerificationCheckResponse {
-        val check = checkRepository.findById(checkId)
-            .orElseThrow { NoSuchElementException("Check not found: $checkId") }
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
 
         if (check.requestedBy.id != requestedBy.id) {
             throw SecurityException("Access denied to check: $checkId")
@@ -66,7 +66,7 @@ class VerificationCheckService(
 
     @Transactional(readOnly = true)
     fun listChecks(requestedBy: User): List<VerificationCheckResponse> {
-        return checkRepository.findAllByRequestedByIdOrderByCreatedAtDesc(requestedBy.id!!)
+        return checkRepository.findAllByRequestedByIdFetched(requestedBy.id!!)
             .map { check ->
                 val evidenceCount = evidenceRepository.findAllByCheckId(check.id!!).size
                 check.toResponse(evidenceCount, plausibility = null)

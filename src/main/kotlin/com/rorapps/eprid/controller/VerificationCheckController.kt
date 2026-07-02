@@ -63,8 +63,8 @@ class VerificationCheckController(
         @PathVariable checkId: String,
         @AuthenticationPrincipal currentUser: User
     ): ResponseEntity<ByteArray> {
-        val check = checkRepository.findById(checkId)
-            .orElseThrow { NoSuchElementException("Check not found: $checkId") }
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
         if (check.requestedBy.id != currentUser.id)
             return ResponseEntity.status(403).build()
         val pdf = reportService.generateCheckReport(check)

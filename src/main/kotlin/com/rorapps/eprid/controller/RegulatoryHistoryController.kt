@@ -27,8 +27,8 @@ class RegulatoryHistoryController(
         @PathVariable checkId: String,
         @AuthenticationPrincipal user: User
     ): ResponseEntity<Map<String, String>> {
-        val check = checkRepository.findById(checkId)
-            .orElseThrow { NoSuchElementException("Check not found: $checkId") }
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
 
         if (check.requestedBy.id != user.id) {
             throw SecurityException("Access denied to check: $checkId")

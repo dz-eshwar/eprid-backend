@@ -96,8 +96,8 @@ class RegulatoryHistoryService(
 
     @Transactional(readOnly = true)
     fun getForCheck(checkId: String, requestingUserId: String): RegulatoryHistoryResponse {
-        val check = checkRepository.findById(checkId)
-            .orElseThrow { NoSuchElementException("Check not found: $checkId") }
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
 
         if (check.requestedBy.id != requestingUserId) {
             throw SecurityException("Access denied to check: $checkId")

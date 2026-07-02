@@ -44,8 +44,8 @@ class EvidenceController(
         @RequestParam("types", required = false) rawTypes: List<String>?,
         @AuthenticationPrincipal currentUser: User
     ): ResponseEntity<ApiResponse<EvidenceUploadResponse>> {
-        val check = checkRepository.findById(checkId)
-            .orElseThrow { NoSuchElementException("Check not found: $checkId") }
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
 
         if (check.requestedBy.id != currentUser.id) {
             return ResponseEntity.status(403)
