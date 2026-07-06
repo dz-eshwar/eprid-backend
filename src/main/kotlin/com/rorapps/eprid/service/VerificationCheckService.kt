@@ -37,8 +37,10 @@ class VerificationCheckService(
                 recycler = recycler,
                 requestedBy = requestedBy,
                 complianceEstimateId = request.complianceEstimateId,
+                wasteStream = request.wasteStream,
                 batchWeightTonnes = request.batchWeightTonnes,
                 claimedRecoveryPct = request.claimedRecoveryPct,
+                claimedOutputQuantity = request.claimedOutputQuantity,
                 processingDate = request.processingDate
             )
         )
@@ -96,7 +98,8 @@ class VerificationCheckService(
                 name = request.recyclerName,
                 bwmrRegNumber = request.bwmrRegNumber,
                 state = request.recyclerState,
-                selfReportedCapacityT = request.recyclerSelfReportedCapacityT
+                selfReportedCapacityT = request.recyclerSelfReportedCapacityT,
+                wasteStream = request.wasteStream
             )
         )
     }
@@ -110,7 +113,8 @@ class VerificationCheckService(
             Producer(
                 name = request.producerName,
                 cpcbRegNumber = request.cpcbRegNumber,
-                createdBy = createdBy
+                createdBy = createdBy,
+                wasteStream = request.wasteStream
             )
         )
     }
@@ -124,8 +128,10 @@ class VerificationCheckService(
         recyclerId = recycler.id!!,
         producerName = producer.name,
         producerId = producer.id!!,
+        wasteStream = wasteStream,
         batchWeightTonnes = batchWeightTonnes,
         claimedRecoveryPct = claimedRecoveryPct,
+        claimedOutputQuantity = claimedOutputQuantity,
         processingDate = processingDate,
         status = status,
         riskRating = riskRating,

@@ -4,9 +4,12 @@ import com.rorapps.eprid.dto.auth.LoginRequest
 import com.rorapps.eprid.dto.auth.RegisterRequest
 import com.rorapps.eprid.entity.User
 import com.rorapps.eprid.entity.UserRole
+import com.rorapps.eprid.repository.RecyclerCredentialCheckRepository
+import com.rorapps.eprid.repository.RecyclerRepository
 import com.rorapps.eprid.repository.UserRepository
 import com.rorapps.eprid.service.auth.AuthService
 import com.rorapps.eprid.service.auth.JwtService
+import com.rorapps.eprid.service.kyc.KycProvider
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -24,6 +27,9 @@ import java.util.Optional
 class AuthServiceTest {
 
     @Mock private lateinit var userRepository: UserRepository
+    @Mock private lateinit var recyclerRepository: RecyclerRepository
+    @Mock private lateinit var recyclerCredentialCheckRepository: RecyclerCredentialCheckRepository
+    @Mock private lateinit var kycProvider: KycProvider
     @Mock private lateinit var passwordEncoder: PasswordEncoder
     @Mock private lateinit var jwtService: JwtService
     @Mock private lateinit var authenticationManager: AuthenticationManager

@@ -1,6 +1,7 @@
 package com.rorapps.eprid.entity
 
 import com.rorapps.eprid.constants.BatteryCategory
+import com.rorapps.eprid.constants.WasteStreamType
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -20,6 +21,11 @@ data class Producer(
     /** Stored as comma-separated enum names; parsed on read */
     @Column(name = "battery_categories", columnDefinition = "TEXT")
     private val batteryCategoriesRaw: String = "",
+
+    /** Waste stream this producer was first created under. Informational, not a hard single-stream constraint. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "waste_stream", nullable = false)
+    val wasteStream: WasteStreamType = WasteStreamType.BATTERY,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", nullable = false)

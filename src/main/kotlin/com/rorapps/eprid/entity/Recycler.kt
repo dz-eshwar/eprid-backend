@@ -1,5 +1,6 @@
 package com.rorapps.eprid.entity
 
+import com.rorapps.eprid.constants.WasteStreamType
 import jakarta.persistence.*
 import java.math.BigDecimal
 import java.time.Instant
@@ -23,6 +24,12 @@ data class Recycler(
 
     @Column(nullable = true)
     val state: String? = null,
+
+    /** Waste stream this recycler was first created under. Informational, not a hard single-stream constraint —
+     *  a recycler processing multiple streams is plausible; each Check's own wasteStream is authoritative. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "waste_stream", nullable = false)
+    val wasteStream: WasteStreamType = WasteStreamType.BATTERY,
 
     /** Set when this recycler was created via RECYCLER user registration — null for recyclers upserted via Module A checks */
     @Column(name = "user_id", nullable = true, unique = true)

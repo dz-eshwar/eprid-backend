@@ -1,5 +1,6 @@
 package com.rorapps.eprid.entity
 
+import com.rorapps.eprid.constants.WasteStreamType
 import jakarta.persistence.*
 import java.math.BigDecimal
 import java.time.Instant
@@ -40,6 +41,14 @@ data class VerificationCheck(
 
     @Column(nullable = false)
     val processingDate: LocalDate,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "waste_stream", nullable = false)
+    val wasteStream: WasteStreamType = WasteStreamType.BATTERY,
+
+    /** Tyre only: claimed TPO (Tyre Pyrolysis Oil) output in litres. Null for battery checks. */
+    @Column(name = "claimed_output_quantity", nullable = true, precision = 12, scale = 3)
+    val claimedOutputQuantity: BigDecimal? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

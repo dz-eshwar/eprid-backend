@@ -1,5 +1,6 @@
 package com.rorapps.eprid.dto.check
 
+import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
 import com.rorapps.eprid.entity.CheckStatus
 import com.rorapps.eprid.entity.RegulatoryStatus
@@ -24,6 +25,9 @@ data class CreateCheckRequest(
     val producerName: String,
     val cpcbRegNumber: String? = null,
 
+    /** Defaults to BATTERY for backward compatibility with existing callers. */
+    val wasteStream: WasteStreamType = WasteStreamType.BATTERY,
+
     // Batch details claimed by the recycler
     @field:NotNull
     @field:DecimalMin("0.001")
@@ -37,6 +41,9 @@ data class CreateCheckRequest(
     @field:NotNull
     val processingDate: LocalDate,
 
+    /** Tyre only: claimed TPO (Tyre Pyrolysis Oil) output in litres. Ignored for other waste streams. */
+    val claimedOutputQuantity: BigDecimal? = null,
+
     /** Optional link back to a calculator session that prompted this check */
     val complianceEstimateId: String? = null
 )
@@ -47,8 +54,10 @@ data class VerificationCheckResponse(
     val recyclerId: String,
     val producerName: String,
     val producerId: String,
+    val wasteStream: WasteStreamType,
     val batchWeightTonnes: BigDecimal,
     val claimedRecoveryPct: BigDecimal,
+    val claimedOutputQuantity: BigDecimal?,
     val processingDate: LocalDate,
     val status: CheckStatus,
     val riskRating: RiskRating?,

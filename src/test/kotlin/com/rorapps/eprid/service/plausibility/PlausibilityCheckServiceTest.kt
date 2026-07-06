@@ -12,7 +12,7 @@ import java.time.LocalDate
 class PlausibilityCheckServiceTest {
 
     private val repo    = mock<PlausibilityCheckRepository>()
-    private val service = PlausibilityCheckService(repo)
+    private val service = PlausibilityCheckService(repo, listOf(BatteryPlausibilityStrategy(), TyrePlausibilityStrategy()))
 
     @BeforeEach
     fun setup() {

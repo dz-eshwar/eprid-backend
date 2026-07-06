@@ -15,7 +15,14 @@ data class RegisterRequest(
     @field:NotBlank
     val fullName: String,
 
-    val role: UserRole = UserRole.CONSULTANT
+    val role: UserRole = UserRole.CONSULTANT,
+
+    // Module A0 — optional recycler KYC fields. Registration must succeed regardless of
+    // whether these are provided or whether the underlying checks pass.
+    val gstin: String? = null,
+    val legalName: String? = null,
+    val udyamNumber: String? = null,
+    val cinOrDin: String? = null
 )
 
 data class LoginRequest(

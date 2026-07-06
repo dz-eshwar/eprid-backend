@@ -1,9 +1,11 @@
 package com.rorapps.eprid.controller
 
 import com.rorapps.eprid.dto.common.ApiResponse
+import com.rorapps.eprid.dto.recycler.CredentialCheckOutcomeDto
 import com.rorapps.eprid.dto.recycler.RecyclerProfileResponse
 import com.rorapps.eprid.entity.User
 import com.rorapps.eprid.entity.UserRole
+import com.rorapps.eprid.repository.RecyclerCredentialCheckRepository
 import com.rorapps.eprid.repository.RecyclerRepository
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
@@ -20,7 +22,10 @@ import org.springframework.web.server.ResponseStatusException
 @RequestMapping("/api/v1/recyclers")
 @Tag(name = "Recycler Profile", description = "Profile for authenticated RECYCLER users")
 @SecurityRequirement(name = "Bearer Authentication")
-class RecyclerController(private val recyclerRepository: RecyclerRepository) {
+class RecyclerController(
+    private val recyclerRepository: RecyclerRepository,
+    private val recyclerCredentialCheckRepository: RecyclerCredentialCheckRepository
+) {
 
     @GetMapping("/me")
     @Operation(
@@ -44,5 +49,31 @@ class RecyclerController(private val recyclerRepository: RecyclerRepository) {
                 state = recycler.state
             )
         ))
+    }
+
+    @GetMapping("/me/credential-checks")
+    @Operation(
+        summary = "Get credential/KYC check history for the current user's recycler account",
+        description = "RECYCLER role only. Module A0 — shows GST/Udyam/MCA check results, most recent first."
+    )
+    fun myCredentialChecks(
+        @AuthenticationPrincipal currentUser: User
+    ): ResponseEntity<ApiResponse<List<CredentialCheckOutcomeDto>>> {
+        if (currentUser.role != UserRole.RECYCLER) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only RECYCLER users can access this endpoint")
+        }
+        val recycler = recyclerRepository.findByUserId(currentUser.id!!)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "No recycler profile linked to your account")
+        val checks = recyclerCredentialCheckRepository.findAllByRecyclerIdOrderByCheckedAtDesc(recycler.id!!)
+            .map {
+                CredentialCheckOutcomeDto(
+                    checkType = it.checkType,
+                    result = it.result,
+                    provider = it.provider,
+                    reason = it.reason,
+                    checkedAt = it.checkedAt
+                )
+            }
+        return ResponseEntity.ok(ApiResponse.ok(checks))
     }
 }
