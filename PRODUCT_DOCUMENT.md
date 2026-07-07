@@ -33,9 +33,9 @@ Backend package `com.rorapps.eprid`, port 8080. Frontend calls backend via `NEXT
 ## 3. Modules
 
 ### Landing page (public marketing site)
-Marketing homepage at `/` (hero, problem bar, how-it-works, who-it's-for, footer). CTA links straight to `/register` — no waitlist gate (an earlier Resend-backed waitlist form was replaced with direct signup once the app went live; the `/api/waitlist` route handler is still present but no longer called from the page).
+Marketing homepage at `/` (hero, problem bar, waste-streams section, how-it-works, who-it's-for, footer). CTA links straight to `/register` — no waitlist gate (an earlier Resend-backed waitlist form was replaced with direct signup once the app went live; the `/api/waitlist` route handler is still present but no longer called from the page). Waste-streams section is a 3-card promo (Battery/Tyre → `/verify`, Used-Oil → `/used-oil`) added when Module E shipped. Landing nav and the authenticated app `Navbar` both got a direct `/used-oil` link at the same time.
 
-- Frontend: `components/landing/LandingPage.tsx`, locale-aware nav with language switcher
+- Frontend: `components/landing/LandingPage.tsx` (`StreamsSection`), `components/layout/Navbar.tsx`, locale-aware nav with language switcher
 
 ### Module B — EPR Compliance Calculator (public, no login, ships first)
 Producer enters battery category (Portable/Automotive/Industrial/EV), FY, quantity placed in market, optional quantity already fulfilled.

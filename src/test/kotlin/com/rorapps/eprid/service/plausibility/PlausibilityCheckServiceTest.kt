@@ -1,5 +1,7 @@
 package com.rorapps.eprid.service.plausibility
 
+import com.rorapps.eprid.constants.TyreEndProduct
+import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.entity.*
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import org.junit.jupiter.api.Assertions.*
@@ -46,6 +48,71 @@ class PlausibilityCheckServiceTest {
             claimedRecoveryPct = BigDecimal(recoveryPct),
             processingDate = LocalDate.now()
         )
+    }
+
+    private fun makeTyreCheck(
+        qp: String?,
+        endProduct: TyreEndProduct?,
+        claimedCreditKg: String?,
+        imported: Boolean = false
+    ): VerificationCheck {
+        val user = User(id = "u1", email = "x@x.com", fullName = "X", passwordHash = "", role = UserRole.CONSULTANT)
+        val recycler = Recycler(id = "r1", name = "Test Tyre Recycler", wasteStream = WasteStreamType.TYRE)
+        val producer = Producer(id = "p1", name = "Test Producer", createdBy = user, wasteStream = WasteStreamType.TYRE)
+        return VerificationCheck(
+            id = "c1",
+            producer = producer,
+            recycler = recycler,
+            requestedBy = user,
+            wasteStream = WasteStreamType.TYRE,
+            batchWeightTonnes = BigDecimal("100"),
+            claimedRecoveryPct = BigDecimal("75"),
+            processingDate = LocalDate.now(),
+            claimedOutputQuantity = qp?.let { BigDecimal(it) },
+            tyreEndProduct = endProduct,
+            tyreImported = imported,
+            claimedEprCreditKg = claimedCreditKg?.let { BigDecimal(it) }
+        )
+    }
+
+    // ── tyre EPR credit reconciliation (QEPR = QP × CF × WP) ───────────────────
+
+    @Test
+    fun `tyre reconciliation passes when claimed credit matches formula`() {
+        // QP=1000, CRUMB_RUBBER: CF=1.333, WP=1.0 -> QEPR = 1333.000
+        val result = service.runAndSave(makeTyreCheck("1000", TyreEndProduct.CRUMB_RUBBER, "1333"))
+        val sub = result.subChecks.first { it.name == "EPR credit reconciliation (QEPR = QP × CF × WP)" }
+        assertEquals(SubCheckStatus.PASS, sub.status)
+    }
+
+    @Test
+    fun `tyre reconciliation warns on moderate deviation`() {
+        // Computed QEPR = 1333; claim it at 1466 (~10% over) -> WARN
+        val result = service.runAndSave(makeTyreCheck("1000", TyreEndProduct.CRUMB_RUBBER, "1466"))
+        val sub = result.subChecks.first { it.name == "EPR credit reconciliation (QEPR = QP × CF × WP)" }
+        assertEquals(SubCheckStatus.WARN, sub.status)
+    }
+
+    @Test
+    fun `tyre reconciliation fails on large deviation`() {
+        val result = service.runAndSave(makeTyreCheck("1000", TyreEndProduct.CRUMB_RUBBER, "3000"))
+        val sub = result.subChecks.first { it.name == "EPR credit reconciliation (QEPR = QP × CF × WP)" }
+        assertEquals(SubCheckStatus.FAIL, sub.status)
+    }
+
+    @Test
+    fun `tyre reconciliation is unverifiable when end product missing`() {
+        val result = service.runAndSave(makeTyreCheck("1000", null, "1333"))
+        val sub = result.subChecks.first { it.name == "EPR credit reconciliation (QEPR = QP × CF × WP)" }
+        assertEquals(SubCheckStatus.UNVERIFIABLE, sub.status)
+    }
+
+    @Test
+    fun `imported tyre forces weightage to 1 regardless of end product`() {
+        // RECLAIMED_RUBBER has WP=1.3 normally; imported forces WP=1.0 -> QEPR = 1000*1.298*1.0 = 1298
+        val result = service.runAndSave(makeTyreCheck("1000", TyreEndProduct.RECLAIMED_RUBBER, "1298", imported = true))
+        val sub = result.subChecks.first { it.name == "EPR credit reconciliation (QEPR = QP × CF × WP)" }
+        assertEquals(SubCheckStatus.PASS, sub.status)
     }
 
     // ── recovery rate ─────────────────────────────────────────────────────────

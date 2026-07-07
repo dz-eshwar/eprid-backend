@@ -68,7 +68,7 @@ class PlausibilityCheckService(
         // Slot 1's label depends on which strategy produced it — battery calls it a recovery-rate
         // check, tyre calls it a TPO-yield check. The column data is generic; only the label differs.
         val slot1Name = if (check.wasteStream == WasteStreamType.TYRE)
-            "TPO yield plausibility"
+            "EPR credit reconciliation (QEPR = QP × CF × WP)"
         else
             "Recovery rate plausibility"
 

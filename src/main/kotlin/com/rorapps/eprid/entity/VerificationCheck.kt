@@ -1,5 +1,6 @@
 package com.rorapps.eprid.entity
 
+import com.rorapps.eprid.constants.TyreEndProduct
 import com.rorapps.eprid.constants.WasteStreamType
 import jakarta.persistence.*
 import java.math.BigDecimal
@@ -46,9 +47,24 @@ data class VerificationCheck(
     @Column(name = "waste_stream", nullable = false)
     val wasteStream: WasteStreamType = WasteStreamType.BATTERY,
 
-    /** Tyre only: claimed TPO (Tyre Pyrolysis Oil) output in litres. Null for battery checks. */
+    /** Tyre only: quantity of end-product sold (QP in CPCB's QEPR = QP × CF × WP formula, §7.5).
+     *  Unit depends on [tyreEndProduct] (kg for solids, litres for pyrolysis oil). Null for battery checks. */
     @Column(name = "claimed_output_quantity", nullable = true, precision = 12, scale = 3)
     val claimedOutputQuantity: BigDecimal? = null,
+
+    /** Tyre only: which end-product category was sold — selects CF/WP from CPCB's table (§7.5). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tyre_end_product", nullable = true)
+    val tyreEndProduct: TyreEndProduct? = null,
+
+    /** Tyre only: true if the underlying waste tyre was imported — forces WP = 1.0 per CPCB's formula. */
+    @Column(name = "tyre_imported", nullable = false)
+    val tyreImported: Boolean = false,
+
+    /** Tyre only: the recycler's claimed EPR certificate credit (kg) for this batch, reconciled
+     *  against the CF×WP-computed QEPR. This is the figure the plausibility check is verifying. */
+    @Column(name = "claimed_epr_credit_kg", nullable = true, precision = 12, scale = 3)
+    val claimedEprCreditKg: BigDecimal? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

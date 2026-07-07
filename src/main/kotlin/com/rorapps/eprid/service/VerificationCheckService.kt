@@ -41,6 +41,9 @@ class VerificationCheckService(
                 batchWeightTonnes = request.batchWeightTonnes,
                 claimedRecoveryPct = request.claimedRecoveryPct,
                 claimedOutputQuantity = request.claimedOutputQuantity,
+                tyreEndProduct = request.tyreEndProduct,
+                tyreImported = request.tyreImported,
+                claimedEprCreditKg = request.claimedEprCreditKg,
                 processingDate = request.processingDate
             )
         )
@@ -132,6 +135,9 @@ class VerificationCheckService(
         batchWeightTonnes = batchWeightTonnes,
         claimedRecoveryPct = claimedRecoveryPct,
         claimedOutputQuantity = claimedOutputQuantity,
+        tyreEndProduct = tyreEndProduct,
+        tyreImported = tyreImported,
+        claimedEprCreditKg = claimedEprCreditKg,
         processingDate = processingDate,
         status = status,
         riskRating = riskRating,

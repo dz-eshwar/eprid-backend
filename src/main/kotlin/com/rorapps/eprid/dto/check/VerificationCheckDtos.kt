@@ -1,5 +1,6 @@
 package com.rorapps.eprid.dto.check
 
+import com.rorapps.eprid.constants.TyreEndProduct
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
 import com.rorapps.eprid.entity.CheckStatus
@@ -41,8 +42,17 @@ data class CreateCheckRequest(
     @field:NotNull
     val processingDate: LocalDate,
 
-    /** Tyre only: claimed TPO (Tyre Pyrolysis Oil) output in litres. Ignored for other waste streams. */
+    /** Tyre only: quantity of end-product sold (QP). Unit depends on [tyreEndProduct]. Ignored for other waste streams. */
     val claimedOutputQuantity: BigDecimal? = null,
+
+    /** Tyre only: which end-product category was sold — selects CF/WP from CPCB's table (§7.5). */
+    val tyreEndProduct: TyreEndProduct? = null,
+
+    /** Tyre only: true if the underlying waste tyre was imported — forces WP = 1.0. */
+    val tyreImported: Boolean = false,
+
+    /** Tyre only: the recycler's claimed EPR certificate credit (kg) for this batch. */
+    val claimedEprCreditKg: BigDecimal? = null,
 
     /** Optional link back to a calculator session that prompted this check */
     val complianceEstimateId: String? = null
@@ -58,6 +68,9 @@ data class VerificationCheckResponse(
     val batchWeightTonnes: BigDecimal,
     val claimedRecoveryPct: BigDecimal,
     val claimedOutputQuantity: BigDecimal?,
+    val tyreEndProduct: TyreEndProduct?,
+    val tyreImported: Boolean,
+    val claimedEprCreditKg: BigDecimal?,
     val processingDate: LocalDate,
     val status: CheckStatus,
     val riskRating: RiskRating?,

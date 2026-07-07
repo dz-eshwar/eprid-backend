@@ -1,6 +1,6 @@
 package com.rorapps.eprid.service.plausibility
 
-import com.rorapps.eprid.constants.TyreBenchmarks
+import com.rorapps.eprid.constants.TyreEprReconciliation
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilitySubCheck
 import com.rorapps.eprid.entity.SubCheckStatus
@@ -11,8 +11,12 @@ import java.math.RoundingMode
 
 /**
  * Tyre/TPO plausibility logic (Module D). Slot 2 (capacity ceiling) and slot 3 (absolute batch
- * size) reuse the generic checks unchanged — only the yield check (slot 1) is tyre-specific,
- * per the PRD's "what's new" scope for this module.
+ * size) reuse the generic checks unchanged — only slot 1 is tyre-specific, per the PRD's
+ * "what's new" scope for this module.
+ *
+ * Slot 1 reconciles the recycler's claimed EPR certificate credit against CPCB's own
+ * certificate-generation formula (QEPR = QP × CF × WP, §7.5) — replacing the earlier
+ * TPO-yield-ratio benchmark, which the PRD explicitly superseded as an unverified estimate.
  */
 @Component
 class TyrePlausibilityStrategy : PlausibilityStrategy {
@@ -20,57 +24,63 @@ class TyrePlausibilityStrategy : PlausibilityStrategy {
     override fun supports(wasteStream: WasteStreamType) = wasteStream == WasteStreamType.TYRE
 
     override fun runChecks(check: VerificationCheck): List<PlausibilitySubCheck> {
-        val yieldCheck = checkTpoYield(check.claimedOutputQuantity, check.batchWeightTonnes)
-        val capacity   = checkCapacityCeiling(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
-        val batchSize  = checkAbsoluteBatchSize(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
-        return listOf(yieldCheck, capacity, batchSize)
+        val reconciliation = checkEprCreditReconciliation(check)
+        val capacity        = checkCapacityCeiling(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
+        val batchSize        = checkAbsoluteBatchSize(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
+        return listOf(reconciliation, capacity, batchSize)
     }
 
-    // ─── Sub-check: TPO yield plausibility ────────────────────────────────────
+    // ─── Sub-check: EPR credit reconciliation (QEPR = QP × CF × WP) ───────────
 
-    private fun checkTpoYield(outputLitres: BigDecimal?, batchWeightT: BigDecimal): PlausibilitySubCheck {
-        val b = TyreBenchmarks
+    private fun checkEprCreditReconciliation(check: VerificationCheck): PlausibilitySubCheck {
+        val qp = check.claimedOutputQuantity
+        val endProduct = check.tyreEndProduct
+        val claimedCredit = check.claimedEprCreditKg
 
-        if (outputLitres == null) {
+        if (qp == null || endProduct == null || claimedCredit == null) {
+            val missing = listOfNotNull(
+                if (qp == null) "end-product quantity sold" else null,
+                if (endProduct == null) "end-product type" else null,
+                if (claimedCredit == null) "claimed EPR certificate credit" else null
+            ).joinToString(", ")
             return PlausibilitySubCheck(
-                name = "TPO yield plausibility",
+                name = "EPR credit reconciliation (QEPR = QP × CF × WP)",
                 status = SubCheckStatus.UNVERIFIABLE,
-                detail = "No claimed TPO (Tyre Pyrolysis Oil) output was provided — cannot assess yield plausibility.",
-                referenceValue = "Expected range: ${b.TPO_YIELD_MIN_L_PER_T}–${b.TPO_YIELD_MAX_L_PER_T} L/tonne"
+                detail = "Cannot reconcile claimed EPR credit against CPCB's certificate-generation formula — missing: $missing.",
+                referenceValue = "Formula: QEPR = QP × CF × WP (CPCB tyre EPR certificate guidance, §7.5)"
             )
         }
 
-        val yieldPerTonne = outputLitres.divide(batchWeightT, 2, RoundingMode.HALF_UP)
-        val warnCeiling = b.TPO_YIELD_MAX_L_PER_T.multiply(b.TPO_YIELD_WARN_MULTIPLIER)
+        val wp = if (check.tyreImported) TyreEprReconciliation.IMPORTED_TYRE_WEIGHTAGE else endProduct.weightage
+        val computedQepr = qp.multiply(endProduct.conversionFactor).multiply(wp)
+            .setScale(3, RoundingMode.HALF_UP)
+
+        val deviationPct = claimedCredit.subtract(computedQepr).abs()
+            .divide(computedQepr, 4, RoundingMode.HALF_UP)
+            .multiply(BigDecimal(100))
+
+        val referenceValue = "Computed QEPR: $computedQepr kg (QP=$qp × CF=${endProduct.conversionFactor} × WP=$wp); claimed: $claimedCredit kg"
 
         return when {
-            yieldPerTonne > warnCeiling -> PlausibilitySubCheck(
-                name = "TPO yield plausibility",
+            deviationPct > TyreEprReconciliation.WARN_TOLERANCE_PCT -> PlausibilitySubCheck(
+                name = "EPR credit reconciliation (QEPR = QP × CF × WP)",
                 status = SubCheckStatus.FAIL,
-                detail = "Claimed yield of ${yieldPerTonne} L/tonne far exceeds the physically plausible ceiling " +
-                         "of ${b.TPO_YIELD_MAX_L_PER_T} L/tonne for tyre pyrolysis oil.",
-                referenceValue = "Physical ceiling: ~${b.TPO_YIELD_MAX_L_PER_T} L/tonne"
+                detail = "Claimed EPR credit of $claimedCredit kg deviates ${deviationPct.setScale(1, RoundingMode.HALF_UP)}% " +
+                         "from CPCB's formula-computed value of $computedQepr kg — well outside a plausible margin.",
+                referenceValue = referenceValue
             )
-            yieldPerTonne > b.TPO_YIELD_MAX_L_PER_T -> PlausibilitySubCheck(
-                name = "TPO yield plausibility",
+            deviationPct > TyreEprReconciliation.PASS_TOLERANCE_PCT -> PlausibilitySubCheck(
+                name = "EPR credit reconciliation (QEPR = QP × CF × WP)",
                 status = SubCheckStatus.WARN,
-                detail = "Claimed yield of ${yieldPerTonne} L/tonne is above the typical ${b.TPO_YIELD_MIN_L_PER_T}–" +
-                         "${b.TPO_YIELD_MAX_L_PER_T} L/tonne range — high but not yet implausible; verify process details.",
-                referenceValue = "Typical range: ${b.TPO_YIELD_MIN_L_PER_T}–${b.TPO_YIELD_MAX_L_PER_T} L/tonne"
-            )
-            yieldPerTonne < b.TPO_YIELD_MIN_L_PER_T -> PlausibilitySubCheck(
-                name = "TPO yield plausibility",
-                status = SubCheckStatus.WARN,
-                detail = "Claimed yield of ${yieldPerTonne} L/tonne is below the typical ${b.TPO_YIELD_MIN_L_PER_T} L/tonne " +
-                         "floor — not physically impossible, but may indicate under-reporting or a non-pyrolysis process.",
-                referenceValue = "Typical floor: ${b.TPO_YIELD_MIN_L_PER_T} L/tonne"
+                detail = "Claimed EPR credit of $claimedCredit kg deviates ${deviationPct.setScale(1, RoundingMode.HALF_UP)}% " +
+                         "from CPCB's formula-computed value of $computedQepr kg — outside the default tolerance; verify.",
+                referenceValue = referenceValue
             )
             else -> PlausibilitySubCheck(
-                name = "TPO yield plausibility",
+                name = "EPR credit reconciliation (QEPR = QP × CF × WP)",
                 status = SubCheckStatus.PASS,
-                detail = "Claimed yield of ${yieldPerTonne} L/tonne is within the typical " +
-                         "${b.TPO_YIELD_MIN_L_PER_T}–${b.TPO_YIELD_MAX_L_PER_T} L/tonne range for tyre pyrolysis oil.",
-                referenceValue = "Typical range: ${b.TPO_YIELD_MIN_L_PER_T}–${b.TPO_YIELD_MAX_L_PER_T} L/tonne"
+                detail = "Claimed EPR credit of $claimedCredit kg is within tolerance of CPCB's formula-computed value of $computedQepr kg.",
+                referenceValue = referenceValue
             )
         }
     }
