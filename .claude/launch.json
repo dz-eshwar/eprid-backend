@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "C:/Users/Eswar/projects/eprid-frontend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "eprid-backend",
+      "runtimeExecutable": "C:/Users/Eswar/projects/EPRid/gradlew.bat",
+      "runtimeArgs": ["bootRun"],
+      "port": 8080
     }
   ]
 }

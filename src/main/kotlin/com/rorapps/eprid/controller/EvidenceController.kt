@@ -2,8 +2,10 @@ package com.rorapps.eprid.controller
 
 import com.rorapps.eprid.constants.EvidenceType
 import com.rorapps.eprid.dto.common.ApiResponse
+import com.rorapps.eprid.dto.forensics.EvidenceSummaryDto
 import com.rorapps.eprid.dto.forensics.EvidenceUploadResponse
 import com.rorapps.eprid.entity.User
+import com.rorapps.eprid.repository.EvidenceRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
 import com.rorapps.eprid.service.forensics.DocumentForensicsOrchestrator
 import io.swagger.v3.oas.annotations.Operation
@@ -22,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile
 @SecurityRequirement(name = "Bearer Authentication")
 class EvidenceController(
     private val checkRepository: VerificationCheckRepository,
+    private val evidenceRepository: EvidenceRepository,
     private val forensicsOrchestrator: DocumentForensicsOrchestrator
 ) {
 
@@ -58,5 +61,36 @@ class EvidenceController(
 
         val result = forensicsOrchestrator.processUploads(check, files, evidenceTypes)
         return ResponseEntity.ok(ApiResponse.ok(result))
+    }
+
+    @GetMapping
+    @Operation(
+        summary = "List evidence already uploaded for a check",
+        description = "Read-later summary (no per-sub-check breakdown, only the joined forensics notes) — " +
+            "used when reopening a completed check's results outside the upload flow."
+    )
+    fun listEvidence(
+        @PathVariable checkId: String,
+        @AuthenticationPrincipal currentUser: User
+    ): ResponseEntity<ApiResponse<List<EvidenceSummaryDto>>> {
+        val check = checkRepository.findByIdFetched(checkId)
+            ?: throw NoSuchElementException("Check not found: $checkId")
+
+        if (check.requestedBy.id != currentUser.id) {
+            return ResponseEntity.status(403)
+                .body(ApiResponse.error("You do not have access to this check"))
+        }
+
+        val summaries = evidenceRepository.findAllByCheckId(checkId).map {
+            EvidenceSummaryDto(
+                evidenceId = it.id!!,
+                fileName = it.fileName,
+                evidenceType = it.evidenceType.name,
+                overallStatus = it.forensicsStatus,
+                notes = it.forensicsNotes,
+                uploadedAt = it.uploadedAt
+            )
+        }
+        return ResponseEntity.ok(ApiResponse.ok(summaries))
     }
 }

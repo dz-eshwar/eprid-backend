@@ -23,3 +23,17 @@ data class EvidenceUploadResponse(
     val filesProcessed: Int,
     val results: List<FileForensicsResult>
 )
+
+/**
+ * Read-later summary for a single piece of evidence — used when reopening a check's results
+ * outside the upload flow. No per-sub-check breakdown is persisted, only the already-joined
+ * [notes] string stored on `Evidence.forensicsNotes` at upload time.
+ */
+data class EvidenceSummaryDto(
+    val evidenceId: String,
+    val fileName: String,
+    val evidenceType: String,
+    val overallStatus: ForensicsStatus,
+    val notes: String?,
+    val uploadedAt: java.time.Instant
+)

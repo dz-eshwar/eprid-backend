@@ -10,6 +10,7 @@ import com.rorapps.eprid.entity.ForensicsStatus
 import com.rorapps.eprid.entity.VerificationCheck
 import com.rorapps.eprid.repository.EvidenceRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
+import com.rorapps.eprid.service.CompositeScoringService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,7 +24,8 @@ class DocumentForensicsOrchestrator(
     private val pdfService: PdfForensicsService,
     private val hashService: ImageHashService,
     private val evidenceRepository: EvidenceRepository,
-    private val checkRepository: VerificationCheckRepository
+    private val checkRepository: VerificationCheckRepository,
+    private val compositeScoringService: CompositeScoringService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -53,6 +55,10 @@ class DocumentForensicsOrchestrator(
             }
             processFile(check, file, evidenceType, recyclerState)
         }
+
+        // Document forensics is one of composite scoring's five signals (§7.1a) — recompute
+        // now that this upload's results are persisted
+        compositeScoringService.recomputeAndSave(check)
 
         return EvidenceUploadResponse(
             checkId = check.id!!,

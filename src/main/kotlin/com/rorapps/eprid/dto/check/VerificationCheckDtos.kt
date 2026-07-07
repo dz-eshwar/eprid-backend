@@ -82,5 +82,20 @@ data class VerificationCheckResponse(
     // Populated async by Agent 5
     val regulatoryStatus: RegulatoryStatus = RegulatoryStatus.NOT_STARTED,
     val regulatoryRisk: String? = null,
-    val regulatorySummary: String? = null
+    val regulatorySummary: String? = null,
+    // Composite risk scoring (§7.1a) — recomputed as plausibility/evidence/regulatory history
+    // each complete, so early in a check's life these sub-scores reflect signals that haven't
+    // run yet (neutral default), not a final verdict
+    val compositeScore: Int? = null,
+    val compositeScoreBreakdown: CompositeScoreBreakdown? = null,
+    val hardDisqualified: Boolean = false,
+    val hardDisqualificationReason: String? = null
+)
+
+data class CompositeScoreBreakdown(
+    val registrationSubScore: Int?,
+    val capacitySubScore: Int?,
+    val invoiceSubScore: Int?,
+    val forensicsSubScore: Int?,
+    val regulatorySubScore: Int?
 )

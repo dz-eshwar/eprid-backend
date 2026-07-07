@@ -46,7 +46,7 @@ class ReportService(
                 cs.beginText()
                 cs.setFont(font, size)
                 cs.newLineAtOffset(x, y)
-                cs.showText(text.take(120))
+                cs.showText(sanitizeForPdf(text).take(120))
                 cs.endText()
                 y -= gap
             }
@@ -74,11 +74,26 @@ class ReportService(
                 RiskRating.LOW -> "LOW RISK"
                 RiskRating.MEDIUM -> "MEDIUM RISK"
                 RiskRating.HIGH -> "HIGH RISK"
+                RiskRating.CRITICAL -> "CRITICAL RISK"
                 null -> "PENDING"
             }
             line("OVERALL RISK RATING: $ratingLabel", BOLD, 13f, gap = 18f)
+            check.compositeScore?.let { line("Composite score: $it / 100", size = 9f) }
+            if (check.hardDisqualified) {
+                line("HARD-DISQUALIFIED: ${check.hardDisqualificationReason}", BOLD, 9f)
+            }
             check.riskSummary?.let { line(it, size = 9f) }
             separator()
+
+            check.compositeScore?.let {
+                line("COMPOSITE SCORE BREAKDOWN", BOLD, 11f)
+                line("Registration/authorization: ${check.registrationSubScore ?: "—"} / 100")
+                line("Capacity/plausibility:      ${check.capacitySubScore ?: "—"} / 100")
+                line("Invoice/GST traceability:   ${check.invoiceSubScore ?: "—"} / 100")
+                line("Document forensics:         ${check.forensicsSubScore ?: "—"} / 100")
+                line("Regulatory history:         ${check.regulatorySubScore ?: "—"} / 100")
+                separator()
+            }
 
             // Plausibility
             line("PLAUSIBILITY CHECK", BOLD, 11f)
@@ -132,6 +147,29 @@ class ReportService(
         document.save(out)
         document.close()
         return out.toByteArray()
+    }
+
+    /**
+     * Standard14 PDF fonts (Helvetica/Courier) use WinAnsiEncoding — a ~220-char Windows-1252
+     * repertoire. Free text rendered here can come from user input or from an LLM's prose
+     * (regulatory summaries, findings), which routinely contains characters outside that
+     * encoding (curly quotes, en/em dashes, ellipsis, rupee sign, non-Latin scripts). PDFBox
+     * throws IllegalArgumentException on the first unencodable character, which the global
+     * exception handler turns into an opaque 400 — so every string reaching showText() must be
+     * sanitized first rather than trusting the source.
+     */
+    private fun sanitizeForPdf(text: String): String {
+        val normalized = text
+            .replace("…", "...")   // …
+            .replace("‘", "'").replace("’", "'")   // ' '
+            .replace("“", "\"").replace("”", "\"") // " "
+            .replace("–", "-").replace("—", "-")   // – —
+            .replace('\n', ' ').replace('\r', ' ')
+        return buildString(normalized.length) {
+            for (ch in normalized) {
+                append(if (ch.code in 0x20..0x7E) ch else '?')
+            }
+        }
     }
 
     private fun statusLabel(status: SubCheckStatus) = when (status) {

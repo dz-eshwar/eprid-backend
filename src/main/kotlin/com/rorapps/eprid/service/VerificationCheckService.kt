@@ -1,5 +1,6 @@
 package com.rorapps.eprid.service
 
+import com.rorapps.eprid.dto.check.CompositeScoreBreakdown
 import com.rorapps.eprid.dto.check.CreateCheckRequest
 import com.rorapps.eprid.dto.check.VerificationCheckResponse
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
@@ -23,7 +24,8 @@ class VerificationCheckService(
     private val recyclerRepository: RecyclerRepository,
     private val evidenceRepository: EvidenceRepository,
     private val plausibilityCheckService: PlausibilityCheckService,
-    private val plausibilityCheckRepository: PlausibilityCheckRepository
+    private val plausibilityCheckRepository: PlausibilityCheckRepository,
+    private val compositeScoringService: CompositeScoringService
 ) {
 
     @Transactional
@@ -51,7 +53,11 @@ class VerificationCheckService(
         // Run plausibility checks synchronously — fast, no external calls
         val plausibility = plausibilityCheckService.runAndSave(check)
 
-        return check.toResponse(evidenceCount = 0, plausibility = plausibility)
+        // Composite score (§7.1a) — partial at this point (forensics/regulatory haven't run yet,
+        // scored as neutral until they do); recomputed again after evidence upload and regulatory history
+        val scored = compositeScoringService.recomputeAndSave(check)
+
+        return scored.toResponse(evidenceCount = 0, plausibility = plausibility)
     }
 
     @Transactional(readOnly = true)
@@ -147,6 +153,18 @@ class VerificationCheckService(
         plausibility = plausibility,
         regulatoryStatus = regulatoryStatus,
         regulatoryRisk = regulatoryRisk,
-        regulatorySummary = regulatorySummary
+        regulatorySummary = regulatorySummary,
+        compositeScore = compositeScore,
+        compositeScoreBreakdown = compositeScore?.let {
+            CompositeScoreBreakdown(
+                registrationSubScore = registrationSubScore,
+                capacitySubScore = capacitySubScore,
+                invoiceSubScore = invoiceSubScore,
+                forensicsSubScore = forensicsSubScore,
+                regulatorySubScore = regulatorySubScore
+            )
+        },
+        hardDisqualified = hardDisqualified,
+        hardDisqualificationReason = hardDisqualificationReason
     )
 }

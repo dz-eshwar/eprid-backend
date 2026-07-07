@@ -8,7 +8,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 enum class CheckStatus { PENDING, RUNNING, COMPLETE, FAILED }
-enum class RiskRating { LOW, MEDIUM, HIGH }
+enum class RiskRating { LOW, MEDIUM, HIGH, CRITICAL }
 enum class RegulatoryStatus { NOT_STARTED, PENDING, COMPLETE, FAILED }
 
 @Entity
@@ -76,6 +76,32 @@ data class VerificationCheck(
 
     @Column(nullable = true, columnDefinition = "TEXT")
     val riskSummary: String? = null,
+
+    // ── Composite risk scoring (§7.1a) — recomputed after plausibility, evidence upload,
+    //    and regulatory history each complete, since those signals arrive at different times ──
+    @Column(name = "composite_score", nullable = true)
+    val compositeScore: Int? = null,
+
+    @Column(name = "registration_sub_score", nullable = true)
+    val registrationSubScore: Int? = null,
+
+    @Column(name = "capacity_sub_score", nullable = true)
+    val capacitySubScore: Int? = null,
+
+    @Column(name = "invoice_sub_score", nullable = true)
+    val invoiceSubScore: Int? = null,
+
+    @Column(name = "forensics_sub_score", nullable = true)
+    val forensicsSubScore: Int? = null,
+
+    @Column(name = "regulatory_sub_score", nullable = true)
+    val regulatorySubScore: Int? = null,
+
+    @Column(name = "hard_disqualified", nullable = false)
+    val hardDisqualified: Boolean = false,
+
+    @Column(name = "hard_disqualification_reason", nullable = true, columnDefinition = "TEXT")
+    val hardDisqualificationReason: String? = null,
 
     // ── Regulatory history fields (populated by Agent 5) ──────────────────────
     @Enumerated(EnumType.STRING)

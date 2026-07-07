@@ -64,28 +64,38 @@ Prereqs for all cases:
 ### TC-D-02: Switch to Tyre — field swap
 1. On `/verify` step 1, change Waste stream to "Tyre / TPO"
 
-**Expected**: "Claimed recovery %" field is replaced by "Claimed TPO output (litres) *". BWMR field label becomes generic "Registration number".
+**Expected**: "Claimed recovery %" field is replaced by "Quantity of end-product sold (QP) *". Three more tyre-only fields appear: "End-product type *" (dropdown), "Claimed EPR certificate credit (kg) *", and a checkbox "The underlying waste tyre was imported". BWMR field label becomes generic "Registration number".
 
-### TC-D-03: Tyre check — plausible yield (PASS)
-1. Waste stream = Tyre, batch weight = 100 T, claimed TPO output = 42,000 L (→ 420 L/T)
+### TC-D-02b: End-product dropdown lists all 6 CPCB categories
+1. Open the "End-product type" dropdown
+
+**Expected**: Options are exactly — Crumb rubber, Reclaimed rubber, Crumb rubber modified bitumen (CRMB), Recovered carbon black, Pyrolysis oil (continuous process), Char (batch process) — plus the blank placeholder.
+
+### TC-D-03: Tyre check — claimed credit matches formula (PASS)
+1. Waste stream = Tyre, end-product = Crumb rubber, QP (quantity sold) = 1000, claimed EPR credit = 1333 kg, imported = unchecked
 2. Submit
 
-**Expected**: Plausibility result shows "TPO yield plausibility" = PASS, detail cites "420.00 L/tonne ... within the typical 400.0–450.0 L/tonne range."
+**Expected**: Plausibility result shows "EPR credit reconciliation (QEPR = QP × CF × WP)" = PASS. Detail/reference cites computed QEPR = 1333.000 kg (QP=1000 × CF=1.333 × WP=1.0), within tolerance of the claimed 1333 kg.
 
-### TC-D-04: Tyre check — implausible yield (FAIL)
-1. Same as above but claimed TPO output = 90,000 L (→ 900 L/T)
+### TC-D-04: Tyre check — large deviation (FAIL)
+1. Same inputs as TC-D-03 but claimed EPR credit = 3000 kg (computed QEPR is still 1333 kg → ~125% deviation)
 
-**Expected**: "TPO yield plausibility" = FAIL, overall status FAIL. Detail cites the yield exceeding the physical ceiling.
+**Expected**: "EPR credit reconciliation" = FAIL, overall status FAIL. Detail states the claimed credit deviates well outside the plausible margin from the formula-computed value.
 
-### TC-D-05: Tyre check — low yield (WARN, not FAIL)
-1. Batch weight = 100 T, claimed TPO output = 30,000 L (→ 300 L/T, below the 400 L/T floor)
+### TC-D-05: Tyre check — moderate deviation (WARN, not FAIL)
+1. Same inputs as TC-D-03 but claimed EPR credit = 1466 kg (~10% over the computed 1333 kg)
 
-**Expected**: "TPO yield plausibility" = WARN (not FAIL) — under-yield is atypical but not physically impossible.
+**Expected**: "EPR credit reconciliation" = WARN (not FAIL) — outside the default 5% tolerance but within the 20% FAIL threshold.
 
-### TC-D-06: Tyre check — no output quantity provided
-1. Via API, POST `/api/v1/checks` with `wasteStream: "TYRE"` and `claimedOutputQuantity` omitted
+### TC-D-06: Tyre check — missing inputs (UNVERIFIABLE)
+1. Via API, POST `/api/v1/checks` with `wasteStream: "TYRE"` and `tyreEndProduct`, `claimedOutputQuantity`, or `claimedEprCreditKg` omitted (try each individually)
 
-**Expected**: "TPO yield plausibility" = UNVERIFIABLE, not a validation error / not silently passing.
+**Expected**: "EPR credit reconciliation" = UNVERIFIABLE in every case, detail names exactly which field(s) are missing — not a validation error, not silently passing.
+
+### TC-D-06b: Imported tyre forces WP = 1.0
+1. End-product = Reclaimed rubber (normal WP = 1.3), QP = 1000, imported = checked, claimed EPR credit = 1298 kg
+
+**Expected**: Computed QEPR uses WP=1.0 (not 1.3) → 1000 × 1.298 × 1.0 = 1298 kg → PASS. Confirms the imported-tyre override actually changes the computation, not just accepted and ignored.
 
 ### TC-D-07: Capacity ceiling and batch size checks still apply to tyre
 1. Create a tyre check for a recycler with a known `recyclerSelfReportedCapacityT`, batch weight close to/over that capacity
@@ -96,7 +106,7 @@ Prereqs for all cases:
 1. Create a tyre check, note its ID
 2. GET `/api/v1/checks/{id}` (or view it again later in the UI)
 
-**Expected**: Sub-check name still reads "TPO yield plausibility" (not "Recovery rate plausibility") on re-fetch — confirms the label isn't hardcoded to battery on the read path.
+**Expected**: Sub-check name still reads "EPR credit reconciliation (QEPR = QP × CF × WP)" (not "Recovery rate plausibility") on re-fetch — confirms the label isn't hardcoded to battery on the read path. Response also echoes back `tyreEndProduct`, `tyreImported`, and `claimedEprCreditKg` matching what was submitted.
 
 ### TC-D-09: Forensics/regulatory/report unaffected by waste stream
 1. Create a tyre check, upload evidence, trigger regulatory history, download the PDF report
@@ -197,4 +207,4 @@ Run the full pre-existing battery flow (Module A risk check + Module B calculato
 Confirm `/api/v1/used-oil/**` is reachable without a token (public) and that `/api/v1/checks/**`, `/api/v1/recyclers/**` still correctly require a Bearer token.
 
 ### TC-X-03: Swagger docs show all new endpoints
-Open `/swagger-ui.html`, confirm three new tag groups appear: "Used-Oil Registration Assistant", the existing "Recycler Profile" tag now includes `/me/credential-checks`, and `POST /api/v1/checks` schema shows the new `wasteStream`/`claimedOutputQuantity` fields.
+Open `/swagger-ui.html`, confirm three new tag groups appear: "Used-Oil Registration Assistant", the existing "Recycler Profile" tag now includes `/me/credential-checks`, and `POST /api/v1/checks` schema shows the new `wasteStream`/`claimedOutputQuantity`/`tyreEndProduct`/`tyreImported`/`claimedEprCreditKg` fields.

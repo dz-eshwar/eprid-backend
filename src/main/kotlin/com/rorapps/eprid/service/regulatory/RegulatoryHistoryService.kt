@@ -7,6 +7,7 @@ import com.rorapps.eprid.entity.RegulatoryStatus
 import com.rorapps.eprid.entity.VerificationCheck
 import com.rorapps.eprid.repository.RegulatoryFindingRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
+import com.rorapps.eprid.service.CompositeScoringService
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
@@ -16,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional
 class RegulatoryHistoryService(
     private val claudeApiClient: ClaudeApiClient,
     private val findingRepository: RegulatoryFindingRepository,
-    private val checkRepository: VerificationCheckRepository
+    private val checkRepository: VerificationCheckRepository,
+    private val compositeScoringService: CompositeScoringService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -43,7 +45,7 @@ class RegulatoryHistoryService(
 
         if (analysis == null) {
             // API not configured or call failed — store a single informational finding
-            checkRepository.save(
+            val failed = checkRepository.save(
                 check.copy(
                     regulatoryStatus  = RegulatoryStatus.FAILED,
                     regulatoryRisk    = "UNKNOWN",
@@ -64,6 +66,7 @@ class RegulatoryHistoryService(
                     confidence  = "HIGH"
                 )
             )
+            compositeScoringService.recomputeAndSave(failed)
             return
         }
 
@@ -83,13 +86,14 @@ class RegulatoryHistoryService(
             )
         }
 
-        checkRepository.save(
+        val completed = checkRepository.save(
             check.copy(
                 regulatoryStatus  = RegulatoryStatus.COMPLETE,
                 regulatoryRisk    = analysis.overallRisk,
                 regulatorySummary = analysis.rationale
             )
         )
+        compositeScoringService.recomputeAndSave(completed)
 
         log.info("Regulatory research complete for check $checkId — risk: ${analysis.overallRisk}, ${entities.size} finding(s)")
     }
