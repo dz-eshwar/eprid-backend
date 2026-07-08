@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile
 
 @RestController
 @RequestMapping("/api/v1/cpcb-recyclers")
-@Tag(name = "CPCB Recycler Directory", description = "Public CPCB battery-recycler registry — Entity Health Score, not the full Certificate Risk Score")
+@Tag(name = "CPCB Recycler Directory", description = "Public CPCB battery-recycler registry — Entity Risk Score, not the full Certificate Risk Score. Higher composite_score = riskier, 0 = cleanest.")
 @SecurityRequirement(name = "Bearer Authentication")
 class CpcbRecyclerController(
     private val ingestionService: CpcbRecyclerIngestionService,
@@ -42,8 +42,9 @@ class CpcbRecyclerController(
     @GetMapping("/search")
     @Operation(
         summary = "Search the CPCB recycler directory",
-        description = "Returns Entity Health Scores only — registration/authorization/geography. " +
-            "Does not include certificate-volume or invoice-based risk (Certificate Risk Score, not built)."
+        description = "Returns Entity Risk Scores only — registration/authorization/geography. " +
+            "Higher composite_score = riskier, 0 = cleanest. Does not include certificate-volume " +
+            "or invoice-based risk (Certificate Risk Score, not built)."
     )
     fun search(
         @RequestParam(required = false) name: String?,

@@ -8,7 +8,7 @@ import java.time.LocalDate
 /**
  * CPCB's own public battery-recycler directory — a separate concept from [Recycler], which holds
  * producer-created/user-upserted recyclers tied to a [VerificationCheck]. This is the raw ingested
- * registry, scoped to "Entity Health Score" only (registration/authorization/geography) — see
+ * registry, scoped to "Entity Risk Score" only (registration/authorization/geography) — see
  * product_document_built_state.md for why certificate-volume/invoice fields are deliberately absent.
  */
 @Entity
@@ -194,9 +194,13 @@ data class CpcbRecyclerAuthorization(
     val categoryLabel: String
 )
 
-/** 'entity_health' today; 'certificate_risk' reserved for when Layer 2 (yield) / Layer 4
- *  (invoice traceability) data actually exists. Don't claim certificate_risk before then. */
-enum class ScoreConfidence { ENTITY_HEALTH, CERTIFICATE_RISK }
+/** ENTITY_RISK today; CERTIFICATE_RISK reserved for when Layer 2 (yield) / Layer 4
+ *  (invoice traceability) data actually exists. Don't claim CERTIFICATE_RISK before then.
+ *  Both are risk scores — higher composite_score = riskier, not "healthier". Renamed from
+ *  ENTITY_HEALTH (2026-07-08): "health score" reads as higher-is-better to anyone who hasn't
+ *  read the scoring code, which is backwards for this field. See V16 migration for the DB
+ *  data rename ('ENTITY_HEALTH' -> 'ENTITY_RISK' on existing cpcb_recycler_scores rows). */
+enum class ScoreConfidence { ENTITY_RISK, CERTIFICATE_RISK }
 
 /** History preserved (one row per scoring run) — same convention as [RecyclerCredentialCheck].
  *  Query latest by recyclerId ORDER BY scoredAt DESC rather than overwriting in place. */
@@ -235,7 +239,7 @@ data class CpcbRecyclerScore(
 
     @Enumerated(EnumType.STRING)
     @Column(name = "score_confidence", nullable = false)
-    val scoreConfidence: ScoreConfidence = ScoreConfidence.ENTITY_HEALTH,
+    val scoreConfidence: ScoreConfidence = ScoreConfidence.ENTITY_RISK,
 
     @Column(name = "scored_at", nullable = false)
     val scoredAt: Instant = Instant.now()

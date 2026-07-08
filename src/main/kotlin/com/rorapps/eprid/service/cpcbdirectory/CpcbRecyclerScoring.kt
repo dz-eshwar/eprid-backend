@@ -18,11 +18,11 @@ data class CpcbScoreResult(
     val flags: List<String>,
     val unassessed: List<String>,
     val layerBreakdown: Map<String, Any?>,
-    val scoreConfidence: ScoreConfidence = ScoreConfidence.ENTITY_HEALTH
+    val scoreConfidence: ScoreConfidence = ScoreConfidence.ENTITY_RISK
 )
 
 /**
- * Entity Health Score — registration/authorization/geography only (this data source has no
+ * Entity Risk Score — registration/authorization/geography only (this data source has no
  * certificate-volume, Form 4, or invoice data; that's Certificate Risk Score, a separate,
  * not-yet-built thing — see product_document_built_state.md).
  *
