@@ -76,6 +76,9 @@ dependencies {
     // Logging
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
 
+    // CSV ingestion (CPCB recycler directory)
+    implementation("org.apache.commons:commons-csv:1.10.0")
+
     developmentOnly("org.springframework.boot:spring-boot-devtools")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
