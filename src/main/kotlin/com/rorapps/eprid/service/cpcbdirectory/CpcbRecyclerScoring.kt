@@ -100,10 +100,16 @@ object CpcbRecyclerScoring {
             }
         }
 
-        // ISO 9001/14001 upload booleans aren't in this ingestion's CSV contract (the seed file
-        // has no recycler_iso_9001_upload/recycler_iso_14001_upload columns) — explicit gap,
-        // not guessed at false. The -10 bonus described in spec can't be applied without them.
-        registrationBreakdown["isoBothOnFile"] = "not captured by this ingestion (no ISO columns in CSV contract)"
+        // The full CSV contract (2026-07-08 pull) does have recycler_iso_9001_upload/
+        // recycler_iso_14001_upload columns, but all 553 rows have them blank at source — so this
+        // is wired up and correct, just inert until CPCB actually starts populating them. NULL is
+        // treated the same as false (no bonus), not guessed at true.
+        val isoBothOnFile = recycler.iso9001Upload == true && recycler.iso14001Upload == true
+        if (isoBothOnFile) {
+            points += ISO_BOTH_PRESENT_BONUS
+            flags += "ISO 9001 and 14001 both on file"
+        }
+        registrationBreakdown["isoBothOnFile"] = isoBothOnFile
 
         // ── Chemistry / process authorization clarity (Layer 1 proxy) ──────────────────────
         val chemistryBreakdown = mutableMapOf<String, Any?>()

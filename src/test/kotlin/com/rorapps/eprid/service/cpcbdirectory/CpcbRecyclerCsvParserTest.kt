@@ -99,4 +99,41 @@ class CpcbRecyclerCsvParserTest {
         assertEquals(1, rows.size)
         assertEquals("GRAVITA INDIA LIMITED", rows[0].recyclerName)
     }
+
+    // Full 41-column CPCB contract (cpcb_battery_recyclers_COMPLETE_2026-07-08.csv) — the three
+    // date shapes actually seen in that pull, and the new optional columns it adds.
+    private val fullHeader = "id,uuid,recycler_name,recycler_address,recycler_web_address,recycler_phone_no," +
+        "state_id,recycler_gst_no,recycler_consent_air,recycler_consent_water,recycler_hwmd_valid," +
+        "recycler_dic_valid,recycler_installed,recycler_operating,recycler_type,recycling_capacity," +
+        "latitude,longitude,recycler_authorized_name,recycler_authorized_email,recycler_authorized_mobile," +
+        "recycler_authorized_phone,Staff_no,Worker_no,recycler_iso_9001_upload,recycler_iso_14001_upload," +
+        "recycler_apcm_upload,recycler_wpcm_upload,InspectionStatus,InternalAppStatus,ApplicationStatus," +
+        "PaymentStatus,certificate,certificate_no,certificate_date,created_at,updated_at,mrai_memb," +
+        "sop_recycling,esg_policy,website_link"
+
+    @Test
+    fun `consent date with CPCB's own space-separated quirk parses same as ISO`() {
+        val csv = fullHeader + "\n" +
+            "1,u,Test Co,Addr,,,7,,2028 03 31,,,,,,,,,,,,,,,,,,,,0,3,1,1,1,,,,,,,,\n"
+        val row = CpcbRecyclerCsvParser.parse(StringReader(csv)).single()
+        assertEquals(LocalDate.of(2028, 3, 31), row.consentAirExpiry)
+    }
+
+    @Test
+    fun `certificate_date in CPCB's 'MMM d, yyyy' shape parses correctly`() {
+        val csv = fullHeader + "\n" +
+            "1,u,Test Co,Addr,,,7,,,,,,,,,,,,,,,,,,,,,,0,3,1,1,1,85461003,\"Mar 28, 2025\",,,,,,\n"
+        val row = CpcbRecyclerCsvParser.parse(StringReader(csv)).single()
+        assertEquals(LocalDate.of(2025, 3, 28), row.certificateDate)
+    }
+
+    @Test
+    fun `boolean upload columns parse '1' true, '0' false, blank null`() {
+        val csv = fullHeader + "\n" +
+            "1,u,Test Co,Addr,,,7,,,,,,,,,,,,,,,,,,1,0,,,0,3,1,1,1,,,,,,,,\n"
+        val row = CpcbRecyclerCsvParser.parse(StringReader(csv)).single()
+        assertEquals(true, row.iso9001Upload)
+        assertEquals(false, row.iso14001Upload)
+        assertNull(row.apcmUpload)
+    }
 }

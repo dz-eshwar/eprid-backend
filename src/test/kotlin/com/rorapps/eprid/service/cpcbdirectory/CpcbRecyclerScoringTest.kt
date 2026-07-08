@@ -197,6 +197,40 @@ class CpcbRecyclerScoringTest {
     }
 
     @Test
+    fun `both ISO certifications on file apply the clean-signal bonus`() {
+        val recycler = CpcbRecycler(
+            id = "r10", recyclerName = "ISO Certified Co",
+            recyclerGstNo = "GST1", consentAirExpiry = LocalDate.of(2030, 1, 1),
+            consentWaterExpiry = LocalDate.of(2030, 1, 1), hwmdValidExpiry = LocalDate.of(2030, 1, 1),
+            recyclerTypeRaw = "R1: Lead Acid Battery Recycler", recyclingCapacity = BigDecimal("100"),
+            latitude = null, longitude = null, staffNo = 5, workerNo = 5,
+            iso9001Upload = true, iso14001Upload = true,
+            dataQualityPartialCapture = false
+        )
+
+        val result = CpcbRecyclerScoring.score(recycler, emptyList(), hotspots, today)
+
+        assertTrue(result.flags.any { it.contains("ISO 9001 and 14001") })
+    }
+
+    @Test
+    fun `only one ISO certification on file does not apply the bonus`() {
+        val recycler = CpcbRecycler(
+            id = "r11", recyclerName = "Partially Certified Co",
+            recyclerGstNo = "GST1", consentAirExpiry = LocalDate.of(2030, 1, 1),
+            consentWaterExpiry = LocalDate.of(2030, 1, 1), hwmdValidExpiry = LocalDate.of(2030, 1, 1),
+            recyclerTypeRaw = "R1: Lead Acid Battery Recycler", recyclingCapacity = BigDecimal("100"),
+            latitude = null, longitude = null, staffNo = 5, workerNo = 5,
+            iso9001Upload = true, iso14001Upload = null,
+            dataQualityPartialCapture = false
+        )
+
+        val result = CpcbRecyclerScoring.score(recycler, emptyList(), hotspots, today)
+
+        assertFalse(result.flags.any { it.contains("ISO 9001 and 14001") })
+    }
+
+    @Test
     fun `composite score is capped at 100 even when points would exceed it`() {
         val recycler = CpcbRecycler(
             id = "r9", recyclerName = "Everything Wrong Co",

@@ -87,6 +87,18 @@ Guided CPCB registration helper for used-oil Collection Agents. Determines CA-1 
 - Frontend: `/used-oil` → `UsedOilAssistantForm` (4-step: Tier → Prerequisites → Application details → Fee & summary) → `UsedOilSummaryResult` (two PDF downloads: plain summary, prefilled application)
 - Open item: fee tiers and the 75km/150km CA-1 service-radius rule are grounded in CPCB's guidance document (read July 2026) — re-verify against future CPCB amendments
 
+### Module F — CPCB Recycler Directory (auth required, standalone browse/search tool)
+Separate from Module A: this is CPCB's own public battery-recycler registry (ingested from a CSV snapshot of the unauthenticated `eprbattery.cpcb.gov.in` DataTables endpoint), not a producer-submitted check. `CpcbRecycler` is a distinct entity from `Recycler` — no FK between them. Scored on an **Entity Health Score** only (registration/authorization/geography) — deliberately has no certificate-volume, Form 4, or invoice data, so it cannot produce the fuller "Certificate Risk Score" Module A aims for; API docs and search descriptions say this explicitly so it isn't mistaken for a stronger signal than it is.
+
+Ingestion (`POST /api/v1/cpcb-recyclers/ingest`, `ADMIN` only) upserts rows by CPCB's own row id via `CpcbRecyclerCsvParser` (Apache Commons CSV). Rows missing a source id are inserted fresh rather than rejected. A `data_quality_partial_capture` heuristic flags rows where ≥6 of 10 tracked optional fields are blank (GST, consents, HWMD, type, capacity, lat/long, staff/worker counts) — this marks the row as under-queried rather than treating those blanks as confirmed-absent, and downstream scoring treats a partial-capture row's blanks as "unassessed" instead of a flag. Ingestion re-scores every row it touches immediately.
+
+`CpcbRecyclerScoring` (additive points, baseline 0, capped [0,100], mapped to the same LOW/MEDIUM/HIGH/CRITICAL bands as Module A) checks: expired Consent-to-Operate air/water (+40, spec-given), expired HWMD authorization (+40, spec-given), expired DIC validity (+10, assumed value), missing GST (+15, assumed), no chemistry/process authorization category on file (+10, assumed), declared capacity >10,000 with no recorded staff/workforce (+15, assumed, new heuristic not in the original methodology, and `recycling_capacity`'s unit is unconfirmed against CPCB documentation so the threshold is a raw-number not unit-aware comparison), plus a geographic-hotspot check (`cpcb_geo_risk_hotspots`, static point+radius reference data, not derived from the CPCB feed) that adds hotspot-specific points when the recycler's lat/long falls within a known risk radius. An ISO 9001/14001 bonus described in the source spec is **not implemented** — the CSV contract has no ISO columns to check. Every point value except the two spec-given ones is an explicit placeholder pending real fraud/clean cases to calibrate against (same caveat as `CompositeScoreWeights` in Module A). Each scoring run is preserved as a new `CpcbRecyclerScore` row (history, not overwrite).
+
+Search (`GET /api/v1/cpcb-recyclers/search`, any authenticated role, filters: name/gst/stateId) returns results sorted highest-risk-first. Deliberately excludes `authorizedName`/`authorizedEmail`/`authorizedMobile` from the response — PII of an individual contact at the recycler, not the company, kept internal/ops-only.
+
+- Backend: `CpcbRecyclerController`, `CpcbRecyclerIngestionService`, `CpcbRecyclerCsvParser`, `CpcbRecyclerScoring`/`CpcbRecyclerScoringService`/`CpcbRecyclerScoringBackfillRunner`, `CpcbRecyclerSearchService`; migrations V12 (`cpcb_recyclers`/`cpcb_recycler_authorizations`/`cpcb_recycler_scores`/`cpcb_geo_risk_hotspots`) + V13 (seed data); routes `POST /api/v1/cpcb-recyclers/ingest`, `GET /api/v1/cpcb-recyclers/search`
+- Frontend: `/cpcb-directory` (sign-in gate if logged out) → `CpcbRecyclerSearchForm` + `CpcbRecyclerResultCard` list. Linked from `Navbar` — hidden for `RECYCLER` role (not relevant to a recycler checking on other recyclers)
+
 ## 4. Data model (backend entities)
 
 | Entity | Purpose |
@@ -101,6 +113,10 @@ Guided CPCB registration helper for used-oil Collection Agents. Determines CA-1 
 | `ComplianceEstimate` | one Module-B calculator session; optional CTA link to a Check |
 | `VaultDocument` | recycler's own stored doc, consent timestamp, soft-delete |
 | `RecyclerCredentialCheck` | Module A0 — one row per KYC check attempt (GST/Udyam/MCA), result history preserved |
+| `CpcbRecycler` | Module F — CPCB's own directory row, ingested from CSV, no FK to `Recycler` |
+| `CpcbRecyclerAuthorization` | Module F — one row per chemistry/process category code (`R1`..`R4`, or `UNKNOWN`) on a `CpcbRecycler` |
+| `CpcbRecyclerScore` | Module F — one row per scoring run (history preserved), composite score/band/flags/unassessed/layer breakdown as JSON |
+| `CpcbGeoRiskHotspot` | Module F — static, hand-maintained geographic risk reference (name, risk level, points, point+radius) |
 
 `Producer`/`Recycler`/`VerificationCheck` all carry a `wasteStream` (`BATTERY`/`TYRE`/`USED_OIL`) column, default `BATTERY`. Module E (used-oil) has **no entities** — fully stateless, no persistence.
 
@@ -144,6 +160,7 @@ Primary teal `#0F6E56` · Graphite `#444441` · Page bg `#F1EFE8` · Coral CTA `
 - Module E: fee schedule and CA-1 service-radius rule need re-verification against future CPCB amendments; no portal integration (informational only, by design)
 - Composite risk scoring (§7.1a): sub-score weights and the LOW/MEDIUM/HIGH/CRITICAL score bands are an uncalibrated draft mechanism — no labeled fraud/clean case set exists yet to tune against
 - Hard-disqualification only implements 2 of the PRD's rules (capacity ratio >3x, active NGT/suspension finding) — CPCB registration expiry, composition-range chemistry violations, and tyre geographic hotspots are not wired up because the codebase doesn't track those inputs
+- Module F (CPCB directory): Entity Health Score only — no certificate-volume/invoice data exists in this source, so it can't become a full Certificate Risk Score without a different data feed; all point values except expired-consent/expired-HWMD (+40 each, spec-given) are unverified placeholders; `recycling_capacity` units unconfirmed (likely MT/year); ISO 9001/14001 bonus described in source spec not implemented (no ISO columns in the CSV contract); geographic hotspot list is static/hand-maintained, not sourced from CPCB
 
 ## 9. Build sequence (per PRD)
 

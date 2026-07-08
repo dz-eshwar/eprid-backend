@@ -95,6 +95,65 @@ data class CpcbRecycler(
     @Column(name = "internal_app_status", nullable = true)
     val internalAppStatus: Int? = null,
 
+    @Column(name = "recycler_web_address", nullable = true)
+    val recyclerWebAddress: String? = null,
+
+    @Column(name = "recycler_phone_no", nullable = true)
+    val recyclerPhoneNo: String? = null,
+
+    /** PII of an individual, same treatment as authorizedMobile — never surfaced by default. */
+    @Column(name = "authorized_phone", nullable = true)
+    val authorizedPhone: String? = null,
+
+    @Column(name = "installed_date", nullable = true)
+    val installedDate: LocalDate? = null,
+
+    @Column(name = "operating_date", nullable = true)
+    val operatingDate: LocalDate? = null,
+
+    /** NULL = not captured (100% of the 2026-07-08 pull) — not scored on until CPCB actually
+     *  populates these; see CpcbRecyclerScoring's isoBothOnFile wiring. */
+    @Column(name = "iso_9001_upload", nullable = true)
+    val iso9001Upload: Boolean? = null,
+
+    @Column(name = "iso_14001_upload", nullable = true)
+    val iso14001Upload: Boolean? = null,
+
+    @Column(name = "apcm_upload", nullable = true)
+    val apcmUpload: Boolean? = null,
+
+    @Column(name = "wpcm_upload", nullable = true)
+    val wpcmUpload: Boolean? = null,
+
+    /** CPCB's own internal status codes — meaning not decoded, stored raw only, not scored on. */
+    @Column(name = "application_status", nullable = true)
+    val applicationStatus: Int? = null,
+
+    @Column(name = "payment_status", nullable = true)
+    val paymentStatus: Int? = null,
+
+    @Column(name = "certificate_no", nullable = true)
+    val certificateNo: String? = null,
+
+    @Column(name = "certificate_date", nullable = true)
+    val certificateDate: LocalDate? = null,
+
+    /** CPCB's own updated_at for this row, if captured — distinct from our own [updatedAt]. */
+    @Column(name = "source_updated_at", nullable = true)
+    val sourceUpdatedAt: Instant? = null,
+
+    @Column(name = "mrai_memb", nullable = true)
+    val mraiMemb: Boolean? = null,
+
+    @Column(name = "sop_recycling", nullable = true)
+    val sopRecycling: Boolean? = null,
+
+    @Column(name = "esg_policy", nullable = true)
+    val esgPolicy: Boolean? = null,
+
+    @Column(name = "website_link", nullable = true)
+    val websiteLink: String? = null,
+
     /** True when this row is missing enough optional fields that a blank shouldn't read as
      *  "confirmed absent" — see CpcbRecyclerIngestionService.isPartialCapture for the heuristic. */
     @Column(name = "data_quality_partial_capture", nullable = false)

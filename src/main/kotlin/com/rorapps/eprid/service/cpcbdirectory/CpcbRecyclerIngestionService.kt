@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.io.Reader
+import java.math.BigDecimal
 
 @Service
 class CpcbRecyclerIngestionService(
@@ -37,6 +38,29 @@ class CpcbRecyclerIngestionService(
 
         fun isPartialCapture(row: ParsedRecyclerRow): Boolean =
             blankFieldCount(row) >= PARTIAL_CAPTURE_BLANK_THRESHOLD
+
+        /**
+         * Rough India bounding box. The full 2026-07-08 pull has 7 rows with implausible lat/lng
+         * (swapped-scale values in the hundreds of thousands, a lat/lng pair reversed onto a
+         * different continent's scale, etc.) — real CPCB source garbage, not our parsing bug.
+         * Rather than geocode against garbage, null the pair out and record what was there.
+         */
+        private val INDIA_LAT_RANGE = 6.0..37.0
+        private val INDIA_LNG_RANGE = 68.0..97.0
+
+        fun isPlausibleIndiaGeo(lat: BigDecimal, lng: BigDecimal): Boolean =
+            lat.toDouble() in INDIA_LAT_RANGE && lng.toDouble() in INDIA_LNG_RANGE
+
+        /**
+         * One known CPCB test/placeholder entry rides on a real company's name and GST prefix
+         * (id 1003, "RELIANCE INDUSTRIES LIMITED", address "ABC", authorized contact "TESTING P")
+         * — not a real facility. Flagged, not filtered: a search for "Reliance" should still surface
+         * it (so a consultant isn't blindsided by a silently-hidden CPCB row), but callers computing
+         * aggregate stats (e.g. average capacity) should exclude flagged rows explicitly.
+         */
+        fun isLikelyTestRow(row: ParsedRecyclerRow): Boolean =
+            row.authorizedName?.contains("test", ignoreCase = true) == true &&
+                (row.recyclerAddress?.trim()?.length ?: Int.MAX_VALUE) <= 5
     }
 
     @Transactional
@@ -55,6 +79,10 @@ class CpcbRecyclerIngestionService(
                 if (row.cpcbId == null) missingSourceIdCount++
                 if (isPartialCapture) partialCaptureCount++
 
+                val geoValid = row.latitude == null || row.longitude == null ||
+                    isPlausibleIndiaGeo(row.latitude, row.longitude)
+                val (latitude, longitude) = if (geoValid) row.latitude to row.longitude else null to null
+
                 val notes = buildList {
                     if (row.cpcbId == null) add(
                         "missing_source_id: CPCB row id/uuid not captured — likely a partial-capture " +
@@ -63,6 +91,14 @@ class CpcbRecyclerIngestionService(
                     if (isPartialCapture) add(
                         "partial_capture: $blankCount of 10 optional fields blank in this row — treat " +
                             "blanks here as unassessed, not confirmed-missing (see CpcbRecyclerIngestionService)"
+                    )
+                    if (!geoValid) add(
+                        "geo_invalid: source lat/lng (${row.latitude}, ${row.longitude}) outside plausible " +
+                            "India bounds — nulled out rather than geocoded against garbage"
+                    )
+                    if (isLikelyTestRow(row)) add(
+                        "likely_test_row: address and authorized-contact name both look like CPCB " +
+                            "placeholder data, not a real facility — kept in directory, not filtered"
                     )
                 }.ifEmpty { null }?.joinToString(" | ")
 
@@ -81,8 +117,8 @@ class CpcbRecyclerIngestionService(
                     dicValidExpiry = row.dicValidExpiry,
                     recyclerTypeRaw = row.recyclerTypeRaw,
                     recyclingCapacity = row.recyclingCapacity,
-                    latitude = row.latitude,
-                    longitude = row.longitude,
+                    latitude = latitude,
+                    longitude = longitude,
                     authorizedName = row.authorizedName,
                     authorizedEmail = row.authorizedEmail,
                     authorizedMobile = row.authorizedMobile,
@@ -92,6 +128,24 @@ class CpcbRecyclerIngestionService(
                     workerNo = row.workerNo,
                     inspectionStatus = row.inspectionStatus,
                     internalAppStatus = row.internalAppStatus,
+                    recyclerWebAddress = row.recyclerWebAddress,
+                    recyclerPhoneNo = row.recyclerPhoneNo,
+                    authorizedPhone = row.authorizedPhone,
+                    installedDate = row.installedDate,
+                    operatingDate = row.operatingDate,
+                    iso9001Upload = row.iso9001Upload,
+                    iso14001Upload = row.iso14001Upload,
+                    apcmUpload = row.apcmUpload,
+                    wpcmUpload = row.wpcmUpload,
+                    applicationStatus = row.applicationStatus,
+                    paymentStatus = row.paymentStatus,
+                    certificateNo = row.certificateNo,
+                    certificateDate = row.certificateDate,
+                    sourceUpdatedAt = row.sourceUpdatedAt,
+                    mraiMemb = row.mraiMemb,
+                    sopRecycling = row.sopRecycling,
+                    esgPolicy = row.esgPolicy,
+                    websiteLink = row.websiteLink,
                     dataQualityPartialCapture = isPartialCapture,
                     dataQualityNotes = notes,
                     updatedAt = java.time.Instant.now()

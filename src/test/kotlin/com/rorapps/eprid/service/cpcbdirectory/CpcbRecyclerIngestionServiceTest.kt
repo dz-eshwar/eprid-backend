@@ -56,4 +56,41 @@ class CpcbRecyclerIngestionServiceTest {
         assertEquals(9, CpcbRecyclerIngestionService.blankFieldCount(gravita))
         assertTrue(CpcbRecyclerIngestionService.isPartialCapture(gravita))
     }
+
+    @Test
+    fun `real India coordinates are plausible`() {
+        // Gravita's Rajasthan facility (id 126)
+        assertTrue(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("26.63024"), BigDecimal("75.66822")))
+    }
+
+    @Test
+    fun `swapped-scale garbage coordinates from the source are rejected, not geocoded`() {
+        // id 250 in the 2026-07-08 pull — six-figure values, not real lat/lng at all
+        assertFalse(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("193521.3"), BigDecimal("731013.0")))
+    }
+
+    @Test
+    fun `a lat-lng pair on the wrong scale for either axis is rejected even if individually digit-plausible`() {
+        // id 644 in the 2026-07-08 pull — 24.19282,55.75506 reads like a real coordinate pair,
+        // just not one inside India (roughly UAE) — must fail the India bounds check, not pass
+        // because both numbers individually look like plausible lat/lng magnitudes.
+        assertFalse(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("24.19282"), BigDecimal("55.75506")))
+    }
+
+    @Test
+    fun `Reliance-shaped placeholder row — test contact name plus near-empty address — is flagged as likely test data`() {
+        val reliance = row().copy(
+            recyclerName = "RELIANCE INDUSTRIES LIMITED",
+            recyclerAddress = "ABC",
+            authorizedName = "TESTING P"
+        )
+        assertTrue(CpcbRecyclerIngestionService.isLikelyTestRow(reliance))
+    }
+
+    @Test
+    fun `a legitimately short address alone does not trigger the test-row flag`() {
+        // id 317 in the 2026-07-08 pull — "E/15" is a real short plot address, not placeholder data
+        val rocklink = row().copy(recyclerAddress = "E/15", authorizedName = "Real Person")
+        assertFalse(CpcbRecyclerIngestionService.isLikelyTestRow(rocklink))
+    }
 }
