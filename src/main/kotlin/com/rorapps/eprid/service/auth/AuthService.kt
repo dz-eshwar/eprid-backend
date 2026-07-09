@@ -30,10 +30,26 @@ class AuthService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    companion object {
+        // Public self-registration must never grant ADMIN. Keep this an explicit allow-list
+        // (not a deny-list) so any future role added to UserRole defaults to non-self-registerable
+        // until someone deliberately opts it in here.
+        private val SELF_REGISTERABLE_ROLES = setOf(
+            UserRole.CONSULTANT,
+            UserRole.PRODUCER_STAFF,
+            UserRole.RECYCLER,
+            UserRole.PUBLISHER
+        )
+    }
+
     @Transactional
     fun register(request: RegisterRequest): AuthResponse {
         if (userRepository.existsByEmail(request.email)) {
             throw IllegalArgumentException("An account with this email already exists")
+        }
+
+        if (request.role !in SELF_REGISTERABLE_ROLES) {
+            throw IllegalArgumentException("Cannot self-register with role ${request.role}")
         }
 
         val user = userRepository.save(

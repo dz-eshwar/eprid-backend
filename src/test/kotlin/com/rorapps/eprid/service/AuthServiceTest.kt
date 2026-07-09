@@ -74,6 +74,23 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `register rejects self-registration as ADMIN`() {
+        whenever(userRepository.existsByEmail("admin@example.com")).thenReturn(false)
+
+        assertThrows<IllegalArgumentException> {
+            authService.register(
+                RegisterRequest(
+                    email = "admin@example.com",
+                    password = "password123",
+                    fullName = "Would-be Admin",
+                    role = UserRole.ADMIN
+                )
+            )
+        }
+        verify(userRepository, never()).save(any())
+    }
+
+    @Test
     fun `login authenticates and returns JWT`() {
         whenever(authenticationManager.authenticate(any())).thenReturn(
             UsernamePasswordAuthenticationToken("test@example.com", "password123")
