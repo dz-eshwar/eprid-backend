@@ -13,6 +13,8 @@ data class CpcbRecyclerSearchResult(
     val recyclerName: String,
     val recyclerAddress: String?,
     val stateId: String?,
+    /** Resolved via cpcb_state_codes — null when state_id is unmapped (see V17), not when it's blank. */
+    val stateName: String?,
     val recyclerGstNo: String?,
     val consentAirExpiry: LocalDate?,
     val consentWaterExpiry: LocalDate?,
@@ -25,6 +27,11 @@ data class CpcbRecyclerSearchResult(
     val dataQualityPartialCapture: Boolean,
     val dataQualityNotes: String?,
     val latestScore: CpcbRecyclerScoreDto?
+)
+
+data class CpcbStateDto(
+    val stateId: String,
+    val stateName: String
 )
 
 data class CpcbAuthorizationDto(

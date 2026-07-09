@@ -3,6 +3,7 @@ package com.rorapps.eprid.controller
 import com.rorapps.eprid.dto.common.ApiResponse
 import com.rorapps.eprid.dto.cpcbdirectory.CpcbIngestionSummaryDto
 import com.rorapps.eprid.dto.cpcbdirectory.CpcbRecyclerSearchResult
+import com.rorapps.eprid.dto.cpcbdirectory.CpcbStateDto
 import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerIngestionService
 import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerSearchService
 import io.swagger.v3.oas.annotations.Operation
@@ -49,7 +50,17 @@ class CpcbRecyclerController(
     fun search(
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) gst: String?,
-        @RequestParam(required = false) stateId: String?
+        @RequestParam(required = false) state: String?
     ): ResponseEntity<ApiResponse<List<CpcbRecyclerSearchResult>>> =
-        ResponseEntity.ok(ApiResponse.ok(searchService.search(name, gst, stateId)))
+        ResponseEntity.ok(ApiResponse.ok(searchService.search(name, gst, state)))
+
+    @GetMapping("/states")
+    @Operation(
+        summary = "List known states for the directory search filter",
+        description = "Resolved from cpcb_state_codes — CPCB's own state_id codes mapped to real " +
+            "state names (inferred, not CPCB-published; see V17 migration). Only covers state_ids " +
+            "actually observed in the loaded directory."
+    )
+    fun listStates(): ResponseEntity<ApiResponse<List<CpcbStateDto>>> =
+        ResponseEntity.ok(ApiResponse.ok(searchService.listStates()))
 }
