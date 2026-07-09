@@ -70,6 +70,10 @@ dependencies {
     // Perceptual image hashing (Agent 3 — duplicate photo detection)
     implementation("com.github.ben-manes.caffeine:caffeine:3.1.8")
 
+    // QR decoding (e-invoice originality check, Tier 1)
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.zxing:javase:3.5.3")
+
     // AWS S3
     implementation("software.amazon.awssdk:s3:2.25.28")
 
@@ -84,6 +88,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    // Self-signed test certs for e-invoice IRP key tests (no JDK-internal APIs)
+    testImplementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -1,16 +1,20 @@
 package com.rorapps.eprid.service.forensics
 
 import com.rorapps.eprid.constants.EvidenceType
+import com.rorapps.eprid.constants.InvoiceOriginalityStatus
 import com.rorapps.eprid.dto.forensics.EvidenceUploadResponse
 import com.rorapps.eprid.dto.forensics.FileForensicsResult
 import com.rorapps.eprid.dto.forensics.ForensicsCheckResult
 import com.rorapps.eprid.dto.forensics.ForensicsCheckStatus
+import com.rorapps.eprid.dto.einvoice.InvoiceOriginalityResult
 import com.rorapps.eprid.entity.Evidence
 import com.rorapps.eprid.entity.ForensicsStatus
 import com.rorapps.eprid.entity.VerificationCheck
 import com.rorapps.eprid.repository.EvidenceRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
 import com.rorapps.eprid.service.CompositeScoringService
+import com.rorapps.eprid.service.einvoice.InvoiceQrVerifier
+import com.rorapps.eprid.service.einvoice.QrCodeExtractor
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -23,6 +27,8 @@ class DocumentForensicsOrchestrator(
     private val exifService: ExifForensicsService,
     private val pdfService: PdfForensicsService,
     private val hashService: ImageHashService,
+    private val qrCodeExtractor: QrCodeExtractor,
+    private val invoiceQrVerifier: InvoiceQrVerifier,
     private val evidenceRepository: EvidenceRepository,
     private val checkRepository: VerificationCheckRepository,
     private val compositeScoringService: CompositeScoringService
@@ -123,6 +129,42 @@ class DocumentForensicsOrchestrator(
             }
         }
 
+        // ── e-invoice QR originality check (PRD §7.1, Tier 1) ──────────────────
+        // Wrapped so a QR/JWT-verification failure can never block the rest of document
+        // forensics — same "never let one signal's failure block the overall flow" rule
+        // used elsewhere (see AuthService.runCredentialChecks).
+        var invoiceQrStatus: InvoiceOriginalityStatus? = null
+        if (evidenceType == EvidenceType.INVOICE) {
+            val invoiceResult = runCatching {
+                val rawQr = when {
+                    contentType in IMAGE_TYPES -> qrCodeExtractor.extractFromImage(tempFile)
+                    contentType == PDF_TYPE -> qrCodeExtractor.extractFromPdf(tempFile)
+                    else -> null
+                }
+                invoiceQrVerifier.verify(rawQr)
+            }.getOrElse { ex ->
+                log.warn("Invoice QR originality check failed for ${file.originalFilename}: ${ex.message}")
+                InvoiceOriginalityResult(
+                    status = InvoiceOriginalityStatus.COULD_NOT_VERIFY,
+                    irp = null,
+                    reason = "Invoice QR check hit an unexpected error: ${ex.message}"
+                )
+            }
+            invoiceQrStatus = invoiceResult.status
+            if (invoiceResult.status != InvoiceOriginalityStatus.NOT_APPLICABLE) {
+                allChecks += ForensicsCheckResult(
+                    checkName = "e-invoice QR originality",
+                    status = when (invoiceResult.status) {
+                        InvoiceOriginalityStatus.VALID -> ForensicsCheckStatus.PASS
+                        InvoiceOriginalityStatus.INVALID -> ForensicsCheckStatus.FAIL
+                        InvoiceOriginalityStatus.COULD_NOT_VERIFY -> ForensicsCheckStatus.UNVERIFIABLE
+                        InvoiceOriginalityStatus.NOT_APPLICABLE -> ForensicsCheckStatus.PASS  // unreachable, guarded above
+                    },
+                    detail = invoiceResult.reason
+                )
+            }
+        }
+
         val overallStatus = deriveOverallStatus(allChecks)
 
         val saved = evidenceRepository.save(
@@ -144,6 +186,7 @@ class DocumentForensicsOrchestrator(
                 evidenceType = evidenceType,
                 resolvedState = resolvedState,
                 stateMatch = stateMatch,
+                invoiceQrStatus = invoiceQrStatus,
                 forensicsStatus = overallStatus,
                 forensicsNotes = allChecks
                     .filter { it.status != ForensicsCheckStatus.PASS }

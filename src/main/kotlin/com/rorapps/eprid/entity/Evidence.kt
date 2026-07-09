@@ -1,6 +1,7 @@
 package com.rorapps.eprid.entity
 
 import com.rorapps.eprid.constants.EvidenceType
+import com.rorapps.eprid.constants.InvoiceOriginalityStatus
 import com.rorapps.eprid.service.forensics.StateMatchStatus
 import jakarta.persistence.*
 import java.time.Instant
@@ -63,6 +64,13 @@ data class Evidence(
 
     @Column(nullable = true, columnDefinition = "TEXT")
     val forensicsNotes: String? = null,
+
+    // ─── e-invoice QR originality check (PRD §7.1, Tier 1) ────────────────────
+    // Kept as its own 4-state field rather than folded into forensicsStatus, so
+    // NOT_APPLICABLE (no QR expected) stays distinguishable from UNVERIFIABLE.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = true)
+    val invoiceQrStatus: InvoiceOriginalityStatus? = null,
 
     @Column(nullable = false, updatable = false)
     val uploadedAt: Instant = Instant.now()
