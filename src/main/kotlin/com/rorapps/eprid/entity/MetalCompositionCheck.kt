@@ -23,7 +23,9 @@ data class MetalCompositionCheck(
     @Column(nullable = false)
     val metal: BatteryMetal,
 
-    @Column(name = "claimed_pct", nullable = true, precision = 6, scale = 3)
+    // scale 4 (not 3) to hold the computed percentage without truncation — claimed metal weight is
+    // kg against a tonnes-scale batch, so realistic percentages are frequently sub-0.01%.
+    @Column(name = "claimed_pct", nullable = true, precision = 9, scale = 4)
     val claimedPct: BigDecimal?,
 
     @Column(name = "expected_min", nullable = false, precision = 6, scale = 3)

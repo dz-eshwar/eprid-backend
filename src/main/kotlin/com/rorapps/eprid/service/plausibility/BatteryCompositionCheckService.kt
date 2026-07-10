@@ -50,8 +50,13 @@ class BatteryCompositionCheckService(
                         "${chemistry.label} composition range (${range.min}-${range.max}%)."
                 )
                 else -> {
+                    // Divide only after multiplying by 100 — claimed weight is kg, batch weight is
+                    // tonnes-derived kg (often 1000x+ larger), so rounding the raw kg/kg ratio to 4
+                    // decimals first truncates any realistic trace-contaminant percentage to exactly
+                    // 0, which then silently defeats the zero-cell check below (a real ZERO_CELL_VIOLATION
+                    // reads as PASS). Compute the percentage itself to 4 decimal places instead.
                     val pct = if (batchWeightKg > BigDecimal.ZERO)
-                        claimedKg.divide(batchWeightKg, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
+                        claimedKg.multiply(BigDecimal(100)).divide(batchWeightKg, 4, RoundingMode.HALF_UP)
                     else BigDecimal.ZERO
 
                     when {

@@ -79,6 +79,26 @@ class BatteryCompositionCheckServiceTest {
     }
 
     @Test
+    fun `small metal claim against a tonnes-scale batch is not truncated to zero`() {
+        // Regression: 50 T batch = 50,000 kg. 2 kg Li against a chemistry expecting 0% Li is a real
+        // ZERO_CELL_VIOLATION (0.004%) — dividing the raw kg ratio to 4 decimals *before* multiplying
+        // by 100 previously rounded 2/50000 = 0.00004 down to 0.0000, silently reading as PASS instead.
+        val check = makeCheck(BatteryChemistry.LEAD_ACID, batchWeightTonnes = BigDecimal("50"))
+        val claimed = listOf(
+            recovery(check, BatteryMetal.PB, "2"),
+            recovery(check, BatteryMetal.LI, "2")
+        )
+        val results = service.runAndSave(check, claimed)
+
+        val liResult = results.first { it.metal == BatteryMetal.LI }
+        assertEquals(CompositionCheckResult.ZERO_CELL_VIOLATION, liResult.result)
+        assertTrue(liResult.claimedPct!! > BigDecimal.ZERO)
+
+        val pbResult = results.first { it.metal == BatteryMetal.PB }
+        assertEquals(CompositionCheckResult.FAIL, pbResult.result) // 2kg/50T is nowhere near 60-80%
+    }
+
+    @Test
     fun `metal with no claimed weight is could-not-verify, not a silent pass`() {
         val check = makeCheck(BatteryChemistry.LEAD_ACID, batchWeightTonnes = BigDecimal("1"))
         val claimed = listOf(recovery(check, BatteryMetal.PB, "700"))
