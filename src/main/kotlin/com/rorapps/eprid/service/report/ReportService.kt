@@ -140,6 +140,7 @@ class ReportService(
             line("This report documents evidence reviewed as of the check date. It is not a legal opinion,", size = 8f, gap = 11f)
             line("audit certification, or guarantee of compliance. Rely on it as one input into due diligence,", size = 8f, gap = 11f)
             line("not as a substitute for regulatory filing or professional legal advice.", size = 8f, gap = 11f)
+            line("Risk weighting is a first-draft model, not yet calibrated against confirmed real-world cases.", size = 8f, gap = 11f)
             line("E-PRid © ${java.time.Year.now().value}  |  eprid.rorapps.com", size = 7f)
         }
 

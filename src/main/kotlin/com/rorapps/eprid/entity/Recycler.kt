@@ -35,6 +35,18 @@ data class Recycler(
     @Column(name = "user_id", nullable = true, unique = true)
     val userId: String? = null,
 
+    @Column(name = "gst_number", nullable = true)
+    val gstNumber: String? = null,
+
+    /** Manual link to the matched row in the CPCB directory ([CpcbRecycler.id]) — the prerequisite
+     *  for hard-disqualification rules 1 (registration validity) and 2 (chemistry-authorization
+     *  mismatch), see feature_spec_close_scoring_gaps.md §2. Not auto-populated: CpcbRecycler's GST
+     *  field has no confirmed format/normalization guarantee (open item, §6), so an automatic join
+     *  risks a false match feeding a hard-disqualification. [CpcbRecyclerLinkService.suggestMatches]
+     *  proposes candidates; linking itself stays an explicit, reviewed action until that's resolved. */
+    @Column(name = "cpcb_recycler_id", nullable = true)
+    val cpcbRecyclerId: String? = null,
+
     @Column(nullable = false, updatable = false)
     val createdAt: Instant = Instant.now(),
 

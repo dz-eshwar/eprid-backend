@@ -5,7 +5,9 @@ import com.rorapps.eprid.constants.CredentialCheckType
 import com.rorapps.eprid.constants.EvidenceType
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.entity.*
+import com.rorapps.eprid.repository.CpcbRecyclerAuthorizationRepository
 import com.rorapps.eprid.repository.EvidenceRepository
+import com.rorapps.eprid.repository.MetalCompositionCheckRepository
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import com.rorapps.eprid.repository.RecyclerCredentialCheckRepository
 import com.rorapps.eprid.repository.RegulatoryFindingRepository
@@ -24,10 +26,14 @@ class CompositeScoringServiceTest {
     private val evidenceRepository         = mock<EvidenceRepository>()
     private val credentialCheckRepository  = mock<RecyclerCredentialCheckRepository>()
     private val regulatoryFindingRepository = mock<RegulatoryFindingRepository>()
+    private val compositionCheckRepository = mock<MetalCompositionCheckRepository>()
+    private val cpcbRecyclerAuthorizationRepository = mock<CpcbRecyclerAuthorizationRepository>()
+    private val registrationValidityAtDateService = mock<RegistrationValidityAtDateService>()
 
     private val service = CompositeScoringService(
         checkRepository, plausibilityRepository, evidenceRepository,
-        credentialCheckRepository, regulatoryFindingRepository
+        credentialCheckRepository, regulatoryFindingRepository,
+        compositionCheckRepository, cpcbRecyclerAuthorizationRepository, registrationValidityAtDateService
     )
 
     private lateinit var user: User
@@ -45,6 +51,9 @@ class CompositeScoringServiceTest {
         whenever(evidenceRepository.findAllByCheckId(any())).thenReturn(emptyList())
         whenever(credentialCheckRepository.findAllByRecyclerIdOrderByCheckedAtDesc(any())).thenReturn(emptyList())
         whenever(regulatoryFindingRepository.findAllByCheckId(any())).thenReturn(emptyList())
+        whenever(compositionCheckRepository.findAllByCheckId(any())).thenReturn(emptyList())
+        whenever(cpcbRecyclerAuthorizationRepository.findAllByRecyclerId(any())).thenReturn(emptyList())
+        whenever(registrationValidityAtDateService.check(any(), any())).thenReturn(RegistrationValidity.UNKNOWN)
     }
 
     private fun makeCheck(wasteStream: WasteStreamType = WasteStreamType.BATTERY) = VerificationCheck(
@@ -185,6 +194,94 @@ class CompositeScoringServiceTest {
         val result = service.recomputeAndSave(makeCheck())
         assertTrue(result.hardDisqualified)
         assertEquals(RiskRating.CRITICAL, result.riskRating)
+    }
+
+    @Test
+    fun `zero-cell composition violation hard-disqualifies (rule 3)`() {
+        whenever(compositionCheckRepository.findAllByCheckId("c1")).thenReturn(
+            listOf(
+                MetalCompositionCheck(
+                    id = "mc1", check = makeCheck(), metal = com.rorapps.eprid.constants.BatteryMetal.LI,
+                    claimedPct = BigDecimal("1"), expectedMin = BigDecimal.ZERO, expectedMax = BigDecimal.ZERO,
+                    result = com.rorapps.eprid.constants.CompositionCheckResult.ZERO_CELL_VIOLATION,
+                    detail = "LI claimed at 1% but Lead Acid batteries should contain 0% LI"
+                )
+            )
+        )
+        val result = service.recomputeAndSave(makeCheck())
+        assertTrue(result.hardDisqualified)
+        assertEquals(100, result.compositeScore)
+        assertTrue(result.hardDisqualificationReason!!.contains("Chemistry-impossible"))
+    }
+
+    @Test
+    fun `expired registration as of certificate date hard-disqualifies (rule 1)`() {
+        whenever(registrationValidityAtDateService.check(eq("r1"), any())).thenReturn(RegistrationValidity.EXPIRED)
+        val result = service.recomputeAndSave(makeCheck())
+        assertTrue(result.hardDisqualified)
+        assertTrue(result.hardDisqualificationReason!!.contains("CPCB registration"))
+    }
+
+    @Test
+    fun `unlinked recycler never triggers rule 1 or rule 2`() {
+        // recycler has no cpcbRecyclerId set — registrationValidityAtDateService stubbed UNKNOWN by default
+        val result = service.recomputeAndSave(makeCheck())
+        assertFalse(result.hardDisqualified)
+    }
+
+    @Test
+    fun `chemistry mismatch against CPCB authorization hard-disqualifies (rule 2)`() {
+        val linkedRecycler = recycler.copy(cpcbRecyclerId = "cpcb1")
+        val check = makeCheck().copy(recycler = linkedRecycler, declaredBatteryChemistry = com.rorapps.eprid.constants.BatteryChemistry.LITHIUM_ION)
+        whenever(cpcbRecyclerAuthorizationRepository.findAllByRecyclerId("cpcb1")).thenReturn(
+            listOf(
+                CpcbRecyclerAuthorization(
+                    id = "auth1", recycler = com.rorapps.eprid.entity.CpcbRecycler(id = "cpcb1", recyclerName = "X"),
+                    categoryCode = "R1", categoryLabel = "R1: Lead Acid Battery Recycler"
+                )
+            )
+        )
+        val result = service.recomputeAndSave(check)
+        assertTrue(result.hardDisqualified)
+        assertTrue(result.hardDisqualificationReason!!.contains("Declared chemistry"))
+    }
+
+    @Test
+    fun `matching chemistry authorization does not hard-disqualify`() {
+        val linkedRecycler = recycler.copy(cpcbRecyclerId = "cpcb1")
+        val check = makeCheck().copy(recycler = linkedRecycler, declaredBatteryChemistry = com.rorapps.eprid.constants.BatteryChemistry.LEAD_ACID)
+        whenever(cpcbRecyclerAuthorizationRepository.findAllByRecyclerId("cpcb1")).thenReturn(
+            listOf(
+                CpcbRecyclerAuthorization(
+                    id = "auth1", recycler = com.rorapps.eprid.entity.CpcbRecycler(id = "cpcb1", recyclerName = "X"),
+                    categoryCode = "R1", categoryLabel = "R1: Lead Acid Battery Recycler"
+                )
+            )
+        )
+        val result = service.recomputeAndSave(check)
+        assertFalse(result.hardDisqualified)
+    }
+
+    @Test
+    fun `multiple tripped rules join into one reason string`() {
+        whenever(plausibilityRepository.findByCheckId("c1"))
+            .thenReturn(plausibility(SubCheckStatus.FAIL, ratio = BigDecimal("3.5")))
+        whenever(compositionCheckRepository.findAllByCheckId("c1")).thenReturn(
+            listOf(
+                MetalCompositionCheck(
+                    id = "mc1", check = makeCheck(), metal = com.rorapps.eprid.constants.BatteryMetal.LI,
+                    claimedPct = BigDecimal("1"), expectedMin = BigDecimal.ZERO, expectedMax = BigDecimal.ZERO,
+                    result = com.rorapps.eprid.constants.CompositionCheckResult.ZERO_CELL_VIOLATION,
+                    detail = "LI violation"
+                )
+            )
+        )
+        val result = service.recomputeAndSave(makeCheck())
+        assertTrue(result.hardDisqualified)
+        val reason = result.hardDisqualificationReason!!
+        assertTrue(reason.contains("capacity"))
+        assertTrue(reason.contains("Chemistry-impossible"))
+        assertTrue(reason.contains(" | "))
     }
 
     @Test

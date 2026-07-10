@@ -1,5 +1,6 @@
 package com.rorapps.eprid.entity
 
+import com.rorapps.eprid.constants.BatteryChemistry
 import com.rorapps.eprid.constants.TyreEndProduct
 import com.rorapps.eprid.constants.WasteStreamType
 import jakarta.persistence.*
@@ -65,6 +66,17 @@ data class VerificationCheck(
      *  against the CF×WP-computed QEPR. This is the figure the plausibility check is verifying. */
     @Column(name = "claimed_epr_credit_kg", nullable = true, precision = 12, scale = 3)
     val claimedEprCreditKg: BigDecimal? = null,
+
+    /** Battery only: chemistry declared for this batch — drives the composition-table check (§1). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "declared_battery_chemistry", nullable = true)
+    val declaredBatteryChemistry: BatteryChemistry? = null,
+
+    /** Date the underlying certificate was actually issued — distinct from [createdAt] (when this
+     *  check was run, which can be months later). Used as the as-of date for registration-validity
+     *  hard-disqualification (§2 rule 1). Falls back to [processingDate] when not supplied. */
+    @Column(name = "certificate_date", nullable = true)
+    val certificateDate: LocalDate? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

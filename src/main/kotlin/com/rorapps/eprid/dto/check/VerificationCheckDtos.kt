@@ -1,5 +1,8 @@
 package com.rorapps.eprid.dto.check
 
+import com.rorapps.eprid.constants.BatteryChemistry
+import com.rorapps.eprid.constants.BatteryMetal
+import com.rorapps.eprid.constants.CompositionCheckResult
 import com.rorapps.eprid.constants.TyreEndProduct
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
@@ -20,6 +23,7 @@ data class CreateCheckRequest(
     val bwmrRegNumber: String? = null,
     val recyclerState: String? = null,
     val recyclerSelfReportedCapacityT: BigDecimal? = null,
+    val recyclerGstNumber: String? = null,
 
     // Producer details (upserted by CPCB reg number if provided)
     @field:NotBlank
@@ -54,8 +58,35 @@ data class CreateCheckRequest(
     /** Tyre only: the recycler's claimed EPR certificate credit (kg) for this batch. */
     val claimedEprCreditKg: BigDecimal? = null,
 
+    /** Battery only: chemistry declared for this batch — drives the composition-table check (§1). Ignored for other waste streams. */
+    val declaredBatteryChemistry: BatteryChemistry? = null,
+
+    /** Battery only: per-metal claimed recovery weights, checked against [declaredBatteryChemistry]'s
+     *  CPCB composition range. Empty list skips the composition check entirely (treated as not submitted). */
+    val claimedMetalRecoveries: List<ClaimedMetalRecoveryInput> = emptyList(),
+
+    /** Date the underlying certificate was actually issued — distinct from when this check is run.
+     *  Falls back to [processingDate] when not supplied. */
+    val certificateDate: LocalDate? = null,
+
     /** Optional link back to a calculator session that prompted this check */
     val complianceEstimateId: String? = null
+)
+
+data class ClaimedMetalRecoveryInput(
+    val metal: BatteryMetal,
+    @field:NotNull
+    @field:DecimalMin("0.0")
+    val claimedWeightKg: BigDecimal
+)
+
+data class MetalCompositionCheckDto(
+    val metal: BatteryMetal,
+    val claimedPct: BigDecimal?,
+    val expectedMin: BigDecimal,
+    val expectedMax: BigDecimal,
+    val result: CompositionCheckResult,
+    val detail: String
 )
 
 data class VerificationCheckResponse(
@@ -71,6 +102,8 @@ data class VerificationCheckResponse(
     val tyreEndProduct: TyreEndProduct?,
     val tyreImported: Boolean,
     val claimedEprCreditKg: BigDecimal?,
+    val declaredBatteryChemistry: BatteryChemistry? = null,
+    val compositionChecks: List<MetalCompositionCheckDto> = emptyList(),
     val processingDate: LocalDate,
     val status: CheckStatus,
     val riskRating: RiskRating?,

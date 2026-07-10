@@ -2,17 +2,23 @@ package com.rorapps.eprid.service
 
 import com.rorapps.eprid.dto.check.CompositeScoreBreakdown
 import com.rorapps.eprid.dto.check.CreateCheckRequest
+import com.rorapps.eprid.dto.check.MetalCompositionCheckDto
 import com.rorapps.eprid.dto.check.VerificationCheckResponse
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
+import com.rorapps.eprid.entity.ClaimedMetalRecovery
+import com.rorapps.eprid.entity.MetalCompositionCheck
 import com.rorapps.eprid.entity.Producer
 import com.rorapps.eprid.entity.Recycler
 import com.rorapps.eprid.entity.User
 import com.rorapps.eprid.entity.VerificationCheck
+import com.rorapps.eprid.repository.ClaimedMetalRecoveryRepository
 import com.rorapps.eprid.repository.EvidenceRepository
+import com.rorapps.eprid.repository.MetalCompositionCheckRepository
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import com.rorapps.eprid.repository.ProducerRepository
 import com.rorapps.eprid.repository.RecyclerRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
+import com.rorapps.eprid.service.plausibility.BatteryCompositionCheckService
 import com.rorapps.eprid.service.plausibility.PlausibilityCheckService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -25,7 +31,10 @@ class VerificationCheckService(
     private val evidenceRepository: EvidenceRepository,
     private val plausibilityCheckService: PlausibilityCheckService,
     private val plausibilityCheckRepository: PlausibilityCheckRepository,
-    private val compositeScoringService: CompositeScoringService
+    private val compositeScoringService: CompositeScoringService,
+    private val claimedMetalRecoveryRepository: ClaimedMetalRecoveryRepository,
+    private val batteryCompositionCheckService: BatteryCompositionCheckService,
+    private val metalCompositionCheckRepository: MetalCompositionCheckRepository
 ) {
 
     @Transactional
@@ -46,12 +55,26 @@ class VerificationCheckService(
                 tyreEndProduct = request.tyreEndProduct,
                 tyreImported = request.tyreImported,
                 claimedEprCreditKg = request.claimedEprCreditKg,
+                declaredBatteryChemistry = request.declaredBatteryChemistry,
+                certificateDate = request.certificateDate,
                 processingDate = request.processingDate
             )
         )
 
         // Run plausibility checks synchronously — fast, no external calls
         val plausibility = plausibilityCheckService.runAndSave(check)
+
+        // Composition-table check (§1) — battery only, only when chemistry + per-metal weights
+        // were submitted. Must run before compositeScoringService so a ZERO_CELL_VIOLATION is
+        // already persisted when hard-disqualification is evaluated.
+        if (request.claimedMetalRecoveries.isNotEmpty()) {
+            val claimedRecoveries = claimedMetalRecoveryRepository.saveAll(
+                request.claimedMetalRecoveries.map { input ->
+                    ClaimedMetalRecovery(check = check, metal = input.metal, claimedWeightKg = input.claimedWeightKg)
+                }
+            )
+            batteryCompositionCheckService.runAndSave(check, claimedRecoveries)
+        }
 
         // Composite score (§7.1a) — partial at this point (forensics/regulatory haven't run yet,
         // scored as neutral until they do); recomputed again after evidence upload and regulatory history
@@ -88,14 +111,16 @@ class VerificationCheckService(
         if (request.bwmrRegNumber != null) {
             val existing = recyclerRepository.findByBwmrRegNumber(request.bwmrRegNumber)
             if (existing != null) {
-                // Update state/capacity if newly provided
+                // Update state/capacity/GST if newly provided
                 val needsUpdate = (request.recyclerState != null && existing.state == null) ||
-                                  (request.recyclerSelfReportedCapacityT != null && existing.selfReportedCapacityT == null)
+                                  (request.recyclerSelfReportedCapacityT != null && existing.selfReportedCapacityT == null) ||
+                                  (request.recyclerGstNumber != null && existing.gstNumber == null)
                 if (needsUpdate) {
                     return recyclerRepository.save(
                         existing.copy(
                             state = request.recyclerState ?: existing.state,
-                            selfReportedCapacityT = request.recyclerSelfReportedCapacityT ?: existing.selfReportedCapacityT
+                            selfReportedCapacityT = request.recyclerSelfReportedCapacityT ?: existing.selfReportedCapacityT,
+                            gstNumber = request.recyclerGstNumber ?: existing.gstNumber
                         )
                     )
                 }
@@ -108,6 +133,7 @@ class VerificationCheckService(
                 bwmrRegNumber = request.bwmrRegNumber,
                 state = request.recyclerState,
                 selfReportedCapacityT = request.recyclerSelfReportedCapacityT,
+                gstNumber = request.recyclerGstNumber,
                 wasteStream = request.wasteStream
             )
         )
@@ -144,6 +170,8 @@ class VerificationCheckService(
         tyreEndProduct = tyreEndProduct,
         tyreImported = tyreImported,
         claimedEprCreditKg = claimedEprCreditKg,
+        declaredBatteryChemistry = declaredBatteryChemistry,
+        compositionChecks = metalCompositionCheckRepository.findAllByCheckId(id!!).map { it.toDto() },
         processingDate = processingDate,
         status = status,
         riskRating = riskRating,
@@ -166,5 +194,14 @@ class VerificationCheckService(
         },
         hardDisqualified = hardDisqualified,
         hardDisqualificationReason = hardDisqualificationReason
+    )
+
+    private fun MetalCompositionCheck.toDto() = MetalCompositionCheckDto(
+        metal = metal,
+        claimedPct = claimedPct,
+        expectedMin = expectedMin,
+        expectedMax = expectedMax,
+        result = result,
+        detail = detail
     )
 }

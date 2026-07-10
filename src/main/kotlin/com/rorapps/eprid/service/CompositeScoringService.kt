@@ -1,13 +1,17 @@
 package com.rorapps.eprid.service
 
+import com.rorapps.eprid.constants.BatteryChemistry
 import com.rorapps.eprid.constants.CompositeScoreWeights
+import com.rorapps.eprid.constants.CompositionCheckResult
 import com.rorapps.eprid.constants.CredentialCheckResult
 import com.rorapps.eprid.constants.EvidenceType
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.entity.ForensicsStatus
 import com.rorapps.eprid.entity.SubCheckStatus
 import com.rorapps.eprid.entity.VerificationCheck
+import com.rorapps.eprid.repository.CpcbRecyclerAuthorizationRepository
 import com.rorapps.eprid.repository.EvidenceRepository
+import com.rorapps.eprid.repository.MetalCompositionCheckRepository
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import com.rorapps.eprid.repository.RecyclerCredentialCheckRepository
 import com.rorapps.eprid.repository.RegulatoryFindingRepository
@@ -26,12 +30,13 @@ import java.math.BigDecimal
  *
  * Only BATTERY and TYRE checks are scored — Module E (used-oil) has no Module A-style pipeline.
  *
- * Two of PRD §7.1a's hard-disqualification rules are wired up because their underlying signals
- * exist today (capacity ratio, active NGT/suspension finding). The rest — CPCB registration
- * expiry, composition-range chemistry violations, tyre geographic hotspots — aren't computed
- * because nothing in this codebase tracks registration expiry, per-metal composition, or the
- * hotspot table yet. Wiring those rules here would silently fabricate a check that isn't
- * actually being run.
+ * Five of PRD §7.1a's six hard-disqualification rules are wired up (feature_spec_close_scoring_gaps.md
+ * §2 closed rules 1-3): capacity ratio, active NGT/suspension finding, registration expired as of
+ * the certificate date (rule 1 — only evaluates once [Recycler.cpcbRecyclerId] is linked), declared
+ * chemistry vs CPCB-authorized category mismatch (rule 2 — same linking prerequisite), and a
+ * composition-table 0%-cell violation (rule 3). Tyre geo-hotspot (rule 4) stays unwired — the
+ * hotspot table itself is only partially corroborated (PRD §7.5), so building a hard-disqualification
+ * rule on an unverified input table is backwards; see feature_spec_close_scoring_gaps.md §2.
  */
 @Service
 class CompositeScoringService(
@@ -39,7 +44,10 @@ class CompositeScoringService(
     private val plausibilityRepository: PlausibilityCheckRepository,
     private val evidenceRepository: EvidenceRepository,
     private val credentialCheckRepository: RecyclerCredentialCheckRepository,
-    private val regulatoryFindingRepository: RegulatoryFindingRepository
+    private val regulatoryFindingRepository: RegulatoryFindingRepository,
+    private val compositionCheckRepository: MetalCompositionCheckRepository,
+    private val cpcbRecyclerAuthorizationRepository: CpcbRecyclerAuthorizationRepository,
+    private val registrationValidityAtDateService: RegistrationValidityAtDateService
 ) {
 
     @Transactional
@@ -107,15 +115,28 @@ class CompositeScoringService(
         }
     }
 
+    /** Folds the composition-table check (§1) into capacitySubScore rather than adding a 6th signal
+     *  (feature_spec_close_scoring_gaps.md §1: "extends the existing sub-score, not a new 6th
+     *  signal"). Takes the worse of the two, since either one flagging a problem is a real signal. */
     private fun capacitySubScore(check: VerificationCheck): Int {
         val plausibility = plausibilityRepository.findByCheckId(check.id!!)
-            ?: return CompositeScoreWeights.NEUTRAL_SUB_SCORE
-        return when (plausibility.overallStatus) {
+        val plausibilityScore = when (plausibility?.overallStatus) {
             SubCheckStatus.PASS -> 0
             SubCheckStatus.WARN -> 40
             SubCheckStatus.FAIL -> 100
-            SubCheckStatus.UNVERIFIABLE -> CompositeScoreWeights.NEUTRAL_SUB_SCORE
+            SubCheckStatus.UNVERIFIABLE, null -> CompositeScoreWeights.NEUTRAL_SUB_SCORE
         }
+
+        val compositionResults = compositionCheckRepository.findAllByCheckId(check.id)
+        if (compositionResults.isEmpty()) return plausibilityScore
+
+        val compositionScore = when {
+            compositionResults.any { it.result == CompositionCheckResult.ZERO_CELL_VIOLATION || it.result == CompositionCheckResult.FAIL } -> 100
+            compositionResults.any { it.result == CompositionCheckResult.COULD_NOT_VERIFY } -> CompositeScoreWeights.NEUTRAL_SUB_SCORE
+            else -> 0
+        }
+
+        return maxOf(plausibilityScore, compositionScore)
     }
 
     private fun invoiceSubScore(check: VerificationCheck): Int {
@@ -148,21 +169,70 @@ class CompositeScoringService(
 
     // ─── Hard-disqualification (PRD §7.1a) — only the rules whose signals actually exist ─────
 
+    /** Collects every rule that trips rather than stopping at the first — a check can fail rule 1
+     *  and rule 3 simultaneously (feature_spec_close_scoring_gaps.md §6, schema-note open item).
+     *  Rather than migrating [VerificationCheck.hardDisqualificationReason] off its single-TEXT-column
+     *  shape, multiple reasons are joined into that one string — cheaper than a list table, and the
+     *  column is already unbounded TEXT so nothing is lost. */
     private fun checkHardDisqualification(check: VerificationCheck): String? {
+        val reasons = mutableListOf<String>()
+
         val plausibility = plausibilityRepository.findByCheckId(check.id!!)
         if (plausibility?.batchToCapacityRatio != null &&
             plausibility.batchToCapacityRatio > BigDecimal("3.0")
         ) {
-            return "Certificate volume implies over 3x the recycler's registered capacity — " +
+            reasons += "Certificate volume implies over 3x the recycler's registered capacity — " +
                 "mathematically impossible given registered capacity."
         }
 
         val activeEnforcement = regulatoryFindingRepository.findAllByCheckId(check.id)
             .any { it.severity == "HIGH" && (it.findingType == "SUSPENSION" || it.findingType == "COURT_ORDER") }
         if (activeEnforcement) {
-            return "Active NGT closure order or show-cause notice found against this recycler."
+            reasons += "Active NGT closure order or show-cause notice found against this recycler."
         }
 
-        return null
+        // Rule 3: composition-table 0%-cell violation (§1)
+        val zeroCellViolations = compositionCheckRepository.findAllByCheckId(check.id)
+            .filter { it.result == CompositionCheckResult.ZERO_CELL_VIOLATION }
+        if (zeroCellViolations.isNotEmpty()) {
+            reasons += "Chemistry-impossible metal claim: " +
+                zeroCellViolations.joinToString("; ") { it.detail }
+        }
+
+        // Rule 1: registration expired as of the certificate date — only evaluable once the
+        // recycler is linked to its CPCB directory row (CpcbRecyclerLinkService).
+        val asOfDate = check.certificateDate ?: check.processingDate
+        if (registrationValidityAtDateService.check(check.recycler.id!!, asOfDate) == RegistrationValidity.EXPIRED) {
+            reasons += "Recycler's CPCB registration (consent/HWM/DIC authorization) had expired as of " +
+                "$asOfDate, the certificate's effective date."
+        }
+
+        // Rule 2: declared chemistry doesn't match the recycler's CPCB-authorized category —
+        // same linking prerequisite as rule 1.
+        val cpcbRecyclerId = check.recycler.cpcbRecyclerId
+        val declaredChemistry = check.declaredBatteryChemistry
+        if (cpcbRecyclerId != null && declaredChemistry != null) {
+            val authorizations = cpcbRecyclerAuthorizationRepository.findAllByRecyclerId(cpcbRecyclerId)
+            if (authorizations.isNotEmpty() &&
+                authorizations.none { it.categoryLabel.contains(CHEMISTRY_KEYWORDS.getValue(declaredChemistry), ignoreCase = true) }
+            ) {
+                reasons += "Declared chemistry (${declaredChemistry.label}) does not match this recycler's " +
+                    "CPCB-authorized categories: " + authorizations.joinToString("; ") { it.categoryLabel }
+            }
+        }
+
+        return reasons.takeIf { it.isNotEmpty() }?.joinToString(" | ")
+    }
+
+    companion object {
+        /** Substring used to match a declared chemistry against CpcbRecyclerAuthorization's free-text
+         *  categoryLabel (e.g. "R1: Lead Acid Battery Recycler") — the CPCB feed has no structured
+         *  chemistry code, only this parsed label text. */
+        private val CHEMISTRY_KEYWORDS = mapOf(
+            BatteryChemistry.LEAD_ACID to "lead acid",
+            BatteryChemistry.LITHIUM_ION to "lithium",
+            BatteryChemistry.ZINC_BASED to "zinc",
+            BatteryChemistry.NICKEL_CADMIUM to "nickel"
+        )
     }
 }
