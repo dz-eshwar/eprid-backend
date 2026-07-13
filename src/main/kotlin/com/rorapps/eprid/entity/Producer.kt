@@ -37,10 +37,14 @@ data class Producer(
     @Column(nullable = false)
     val updatedAt: Instant = Instant.now()
 ) {
+    // BatteryCategory split from 4 values to 7 (2026-07-10, real Schedule II fix) — this raw field is
+    // otherwise unused by any DTO/service today, but parse defensively rather than throw on a legacy
+    // stored name (e.g. old "PORTABLE"/"ELECTRIC_VEHICLE") in case any row predates the rename.
     @get:Transient
     val batteryCategories: List<BatteryCategory>
         get() = batteryCategoriesRaw
             .split(",")
+            .map { it.trim() }
             .filter { it.isNotBlank() }
-            .map { BatteryCategory.valueOf(it.trim()) }
+            .mapNotNull { name -> runCatching { BatteryCategory.valueOf(name) }.getOrNull() }
 }

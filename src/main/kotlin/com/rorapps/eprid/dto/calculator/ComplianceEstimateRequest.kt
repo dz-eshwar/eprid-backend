@@ -12,6 +12,10 @@ data class ComplianceEstimateRequest(
     @field:NotNull(message = "Financial year is required")
     val financialYear: String,
 
+    /** Schedule II's collection target technically applies to a *prior reference year's* quantity
+     *  placed in market (see RecoveryTargets.kt), not this FY's — this calculator has no producer
+     *  history store for prior-year figures, so this value is used as a same-year proxy. The response
+     *  states which reference year the % nominally applies to so this approximation is visible, not silent. */
     @field:NotNull(message = "Quantity placed in market is required")
     @field:DecimalMin(value = "0.001", message = "Quantity must be greater than zero")
     val quantityPlacedTonnes: BigDecimal,

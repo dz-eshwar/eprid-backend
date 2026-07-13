@@ -25,12 +25,21 @@ import java.math.BigDecimal
 object EcRates {
 
     /** EC rate per tonne of shortfall for EPR-target non-fulfilment, by battery category.
-     *  Source: CPCB EC Guidelines Aug 2024. Using the general battery EPR non-fulfilment tier. */
+     *  Source: CPCB EC Guidelines Aug 2024. Using the general battery EPR non-fulfilment tier — this
+     *  flat per-category rate is itself a known approximation (PRODUCT_DOCUMENT.md §6): the real EC
+     *  Guidelines rate is per-METAL (lead-acid ₹18/kg, lithium ₹2,400/kg, etc.), not per battery
+     *  category, and this calculator has no per-metal composition input to apply that properly.
+     *  Remapped 2026-07-10 onto the 7-way [BatteryCategory] split (was 4-way) — same rate carried
+     *  over to both Portable sub-categories and all three EV sub-categories; the EC-rate-per-category
+     *  approximation itself is unchanged, out of scope for this pass. */
     val EC_RATE_PER_TONNE: Map<BatteryCategory, BigDecimal> = mapOf(
-        BatteryCategory.PORTABLE        to BigDecimal("50000"),   // ₹50,000 per tonne
-        BatteryCategory.AUTOMOTIVE      to BigDecimal("40000"),   // ₹40,000 per tonne
-        BatteryCategory.INDUSTRIAL      to BigDecimal("40000"),   // ₹40,000 per tonne
-        BatteryCategory.ELECTRIC_VEHICLE to BigDecimal("60000"),  // ₹60,000 per tonne
+        BatteryCategory.PORTABLE_RECHARGEABLE     to BigDecimal("50000"),  // ₹50,000 per tonne
+        BatteryCategory.PORTABLE_NON_RECHARGEABLE to BigDecimal("50000"),  // ₹50,000 per tonne
+        BatteryCategory.AUTOMOTIVE                to BigDecimal("40000"),  // ₹40,000 per tonne
+        BatteryCategory.INDUSTRIAL                to BigDecimal("40000"),  // ₹40,000 per tonne
+        BatteryCategory.EV_THREE_WHEELER          to BigDecimal("60000"), // ₹60,000 per tonne
+        BatteryCategory.EV_TWO_WHEELER            to BigDecimal("60000"), // ₹60,000 per tonne
+        BatteryCategory.EV_FOUR_WHEELER           to BigDecimal("60000"), // ₹60,000 per tonne
     )
 
     /** Refund percentage remaining after resolution in year N (1-indexed). */
