@@ -13,7 +13,12 @@ enum class VaultDocType {
     // Regulatory Authorizations
     PCB_AUTHORIZATION,              // State/Central PCB consent to operate
     HAZARDOUS_WASTE_AUTHORIZATION,  // Authorization under HWM Rules 2016
-    EPR_REGISTRATION_CERT,          // EPR registration from CPCB portal
+    // NOTE: no separate "EPR registration certificate" type exists — removed 2026-07-15.
+    // CPCB's own FAQ confirms there is no distinct registration certificate for EPR;
+    // registration is granted only under Form 1(B) (producers) / Form 2(B) (recyclers,
+    // via SPCB), which is what REGISTRATION_CERT above already represents. Do not
+    // reintroduce an "EPR_*" registration-cert variant — it duplicates REGISTRATION_CERT
+    // and implies a document that doesn't exist.
 
     // Capacity & Infrastructure
     CAPACITY_CERTIFICATE,           // Annual recycling capacity (tonnes/yr) from competent authority

@@ -105,7 +105,6 @@ class VaultService(
         VaultDocTypeInfo("INCORPORATION_CERT",          "Incorporation Certificate",       "Company incorporation or partnership deed"),
         VaultDocTypeInfo("PCB_AUTHORIZATION",           "PCB Authorization",              "State/Central Pollution Control Board consent to operate"),
         VaultDocTypeInfo("HAZARDOUS_WASTE_AUTHORIZATION","Hazardous Waste Authorization", "Authorization under Hazardous Waste Management Rules 2016"),
-        VaultDocTypeInfo("EPR_REGISTRATION_CERT",       "EPR Registration Certificate",   "Extended Producer Responsibility registration from CPCB portal"),
         VaultDocTypeInfo("CAPACITY_CERTIFICATE",        "Capacity Certificate",           "Annual recycling capacity (tonnes/yr) assessed by competent authority"),
         VaultDocTypeInfo("PROCESSING_RECEIPT",          "Processing Receipt",             "Recycling completion receipt per batch"),
         VaultDocTypeInfo("WEIGHBRIDGE_SLIP",            "Weighbridge Slip",               "Weight slip proving quantity of batteries received or processed"),

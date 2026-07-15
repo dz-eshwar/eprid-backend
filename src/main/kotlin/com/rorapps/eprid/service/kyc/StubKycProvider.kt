@@ -32,4 +32,5 @@ class StubKycProvider(
     override fun verifyGstOtp(gstin: String, otp: String) = notConfigured(CredentialCheckType.GST_OTP_VERIFICATION)
     override fun verifyUdyam(udyamNumber: String) = notConfigured(CredentialCheckType.UDYAM_VERIFICATION)
     override fun verifyMca(cinOrDin: String) = notConfigured(CredentialCheckType.MCA_VERIFICATION)
+    override fun verifyPan(pan: String, legalName: String) = notConfigured(CredentialCheckType.PAN_VERIFICATION)
 }

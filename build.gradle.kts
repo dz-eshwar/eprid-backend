@@ -120,9 +120,9 @@ jacoco {
 }
 
 flyway {
-    url = System.getenv("DB_URL") ?: "jdbc:postgresql://localhost:5432/eprid"
-    user = System.getenv("DB_USERNAME") ?: "eprid"
-    password = System.getenv("DB_PASSWORD") ?: "eprid"
+    url = System.getenv("DB_URL") ?: error("DB_URL env var not set")
+    user = System.getenv("DB_USERNAME") ?: error("DB_USERNAME env var not set")
+    password = System.getenv("DB_PASSWORD") ?: error("DB_PASSWORD env var not set")
     locations = arrayOf("filesystem:src/main/resources/db/migration")
     cleanDisabled = false
     driver = "org.postgresql.Driver"

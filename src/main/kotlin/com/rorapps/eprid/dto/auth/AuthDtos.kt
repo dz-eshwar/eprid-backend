@@ -22,7 +22,8 @@ data class RegisterRequest(
     val gstin: String? = null,
     val legalName: String? = null,
     val udyamNumber: String? = null,
-    val cinOrDin: String? = null
+    val cinOrDin: String? = null,
+    val pan: String? = null
 )
 
 data class LoginRequest(

@@ -20,4 +20,5 @@ interface KycProvider {
     fun verifyGstOtp(gstin: String, otp: String): CredentialCheckOutcome
     fun verifyUdyam(udyamNumber: String): CredentialCheckOutcome
     fun verifyMca(cinOrDin: String): CredentialCheckOutcome
+    fun verifyPan(pan: String, legalName: String): CredentialCheckOutcome
 }

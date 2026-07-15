@@ -83,6 +83,8 @@ class AuthService(
                     add(kycProvider.verifyUdyam(request.udyamNumber))
                 if (request.cinOrDin != null)
                     add(kycProvider.verifyMca(request.cinOrDin))
+                if (request.pan != null && request.legalName != null)
+                    add(kycProvider.verifyPan(request.pan, request.legalName))
             }
             outcomes.forEach { outcome ->
                 recyclerCredentialCheckRepository.save(

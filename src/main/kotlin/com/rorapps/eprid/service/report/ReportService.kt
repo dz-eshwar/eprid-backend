@@ -78,6 +78,8 @@ class ReportService(
                 null -> "PENDING"
             }
             line("OVERALL RISK RATING: $ratingLabel", BOLD, 13f, gap = 18f)
+            line("This is a signal derived from available public/regulatory data, not a legal finding or a", size = 7f, gap = 10f)
+            line("verdict on the recycler — see DISCLAIMER below.", size = 7f)
             check.compositeScore?.let { line("Composite score: $it / 100", size = 9f) }
             if (check.hardDisqualified) {
                 line("HARD-DISQUALIFIED: ${check.hardDisqualificationReason}", BOLD, 9f)
@@ -130,7 +132,7 @@ class ReportService(
                 line("Findings (${findings.size}):", size = 9f)
                 findings.take(10).forEach { f ->
                     line("[${f.severity}] ${f.title}", size = 9f)
-                    line("  Source: ${f.source}  Confidence: ${f.confidence}", MONO, 8f, gap = 12f)
+                    line("  Source: ${f.source}  Dated: ${f.findingDate ?: "not recorded"}  Confidence: ${f.confidence}", MONO, 8f, gap = 12f)
                 }
             }
             separator()
@@ -141,6 +143,10 @@ class ReportService(
             line("audit certification, or guarantee of compliance. Rely on it as one input into due diligence,", size = 8f, gap = 11f)
             line("not as a substitute for regulatory filing or professional legal advice.", size = 8f, gap = 11f)
             line("Risk weighting is a first-draft model, not yet calibrated against confirmed real-world cases.", size = 8f, gap = 11f)
+            line("Findings are signals surfaced from public/government data sources as of the dates shown", size = 8f, gap = 11f)
+            line("above, not independently re-verified with the recycler, and the recycler has not been given", size = 8f, gap = 11f)
+            line("an opportunity to respond to any specific finding in this report. Source data may since have", size = 8f, gap = 11f)
+            line("changed or been corrected. Treat every finding as worth checking, not as a proven fact.", size = 8f, gap = 11f)
             line("E-PRid © ${java.time.Year.now().value}  |  eprid.rorapps.com", size = 7f)
         }
 
