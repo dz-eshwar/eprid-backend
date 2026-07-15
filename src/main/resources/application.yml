@@ -77,3 +77,7 @@ app:
     s3-bucket: ${S3_VAULT_BUCKET:eprid-vault-dev}
     access-key: ${AWS_ACCESS_KEY_ID:}
     secret-key: ${AWS_SECRET_ACCESS_KEY:}
+  cpcb:
+    # NOT independently verified against the live endpoint this session — see
+    # CpcbRecyclerJsonFetcher's class doc. Override via env if the URL or shape needs adjusting.
+    recyclerview-url: ${CPCB_RECYCLERVIEW_URL:https://eprbattery.cpcb.gov.in/user/recyclerview}

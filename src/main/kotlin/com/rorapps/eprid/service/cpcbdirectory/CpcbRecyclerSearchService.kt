@@ -60,7 +60,17 @@ class CpcbRecyclerSearchService(
     private fun toSearchResult(recycler: CpcbRecycler, stateNamesById: Map<String, String>): CpcbRecyclerSearchResult {
         val authorizations = authorizationRepository.findAllByRecyclerId(recycler.id!!)
             .map { CpcbAuthorizationDto(it.categoryCode, it.categoryLabel) }
-        val latest = scoreRepository.findFirstByRecyclerIdOrderByScoredAtDesc(recycler.id)?.let { score ->
+
+        // §4 review gate: a band flip is flagged, not applied — hold back the just-flipped score
+        // and keep showing the last one an admin never had to glance at, until confirmed via
+        // CpcbRecyclerRefreshService.confirmReview.
+        val scoreToShow = if (recycler.pendingReview) {
+            scoreRepository.findTop2ByRecyclerIdOrderByScoredAtDesc(recycler.id).getOrNull(1)
+        } else {
+            scoreRepository.findFirstByRecyclerIdOrderByScoredAtDesc(recycler.id)
+        }
+
+        val latest = scoreToShow?.let { score ->
             CpcbRecyclerScoreDto(
                 compositeScore = score.compositeScore,
                 riskBand = score.riskBand,
@@ -91,7 +101,8 @@ class CpcbRecyclerSearchService(
             authorizations = authorizations,
             dataQualityPartialCapture = recycler.dataQualityPartialCapture,
             dataQualityNotes = recycler.dataQualityNotes,
-            latestScore = latest
+            latestScore = latest,
+            lastSyncedAt = recycler.lastSyncedAt
         )
     }
 }

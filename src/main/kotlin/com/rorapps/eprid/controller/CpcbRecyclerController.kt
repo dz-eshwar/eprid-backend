@@ -2,9 +2,12 @@ package com.rorapps.eprid.controller
 
 import com.rorapps.eprid.dto.common.ApiResponse
 import com.rorapps.eprid.dto.cpcbdirectory.CpcbIngestionSummaryDto
+import com.rorapps.eprid.dto.cpcbdirectory.CpcbPendingReviewItemDto
 import com.rorapps.eprid.dto.cpcbdirectory.CpcbRecyclerSearchResult
+import com.rorapps.eprid.dto.cpcbdirectory.CpcbRefreshRunSummaryDto
 import com.rorapps.eprid.dto.cpcbdirectory.CpcbStateDto
 import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerIngestionService
+import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerRefreshService
 import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerSearchService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
@@ -21,7 +24,8 @@ import org.springframework.web.multipart.MultipartFile
 @SecurityRequirement(name = "Bearer Authentication")
 class CpcbRecyclerController(
     private val ingestionService: CpcbRecyclerIngestionService,
-    private val searchService: CpcbRecyclerSearchService
+    private val searchService: CpcbRecyclerSearchService,
+    private val refreshService: CpcbRecyclerRefreshService
 ) {
 
     @PostMapping("/ingest", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -63,4 +67,41 @@ class CpcbRecyclerController(
     )
     fun listStates(): ResponseEntity<ApiResponse<List<CpcbStateDto>>> =
         ResponseEntity.ok(ApiResponse.ok(searchService.listStates()))
+
+    @PostMapping("/refresh")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Manually trigger a CPCB recycler directory refresh run",
+        description = "Same diff-and-flag logic as the nightly scheduled job (CpcbRecyclerRefreshService) " +
+            "— fetches the live CPCB dataset, diffs against stored state, flags risk-band changes for " +
+            "review rather than silently applying them. Useful for an on-demand refresh outside the " +
+            "scheduled early-morning slot."
+    )
+    fun triggerRefresh(): ResponseEntity<ApiResponse<CpcbRefreshRunSummaryDto>> =
+        ResponseEntity.ok(ApiResponse.ok(refreshService.refresh()))
+
+    @GetMapping("/refresh-runs")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Recent CPCB directory refresh run history")
+    fun refreshRuns(): ResponseEntity<ApiResponse<List<CpcbRefreshRunSummaryDto>>> =
+        ResponseEntity.ok(ApiResponse.ok(refreshService.recentRuns()))
+
+    @GetMapping("/pending-review")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(
+        summary = "Recyclers whose risk band changed on the last refresh and haven't been reviewed",
+        description = "feature_spec_cpcb_directory_refresh.md §4 review gate — a Low/Medium/High/Critical " +
+            "band flip stays flagged here (and does not silently show under the new band externally) " +
+            "until cleared via confirm-review."
+    )
+    fun pendingReview(): ResponseEntity<ApiResponse<List<CpcbPendingReviewItemDto>>> =
+        ResponseEntity.ok(ApiResponse.ok(refreshService.pendingReview()))
+
+    @PostMapping("/{id}/confirm-review")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Clear the pending-review flag after a human has glanced at a band-changed recycler")
+    fun confirmReview(@PathVariable id: String): ResponseEntity<ApiResponse<Map<String, Boolean>>> {
+        refreshService.confirmReview(id)
+        return ResponseEntity.ok(ApiResponse.ok(mapOf("confirmed" to true)))
+    }
 }

@@ -172,7 +172,25 @@ data class CpcbRecycler(
     val createdAt: Instant = Instant.now(),
 
     @Column(name = "updated_at", nullable = false)
-    val updatedAt: Instant = Instant.now()
+    val updatedAt: Instant = Instant.now(),
+
+    /** Set by [com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerRefreshService] on every
+     *  refresh pull that includes this row, whether or not any tracked field changed. Surface
+     *  this ("Data as of...") anywhere a score is shown externally — a snapshot should always say
+     *  it's a snapshot. Null for rows only ever touched by manual CSV ingest. */
+    @Column(name = "last_synced_at", nullable = true)
+    val lastSyncedAt: Instant? = null,
+
+    /** Set when a refresh run flips this recycler's risk BAND (not just a sub-score number).
+     *  Blocks nothing server-side — it's a signal for an admin to glance and clear via
+     *  CpcbRecyclerRefreshService.confirmReview, not an enforced gate. */
+    @Column(name = "pending_review", nullable = false)
+    val pendingReview: Boolean = false,
+
+    /** Set when a previously-seen cpcb_id is absent from a refresh pull; cleared automatically if
+     *  it reappears in a later pull. Never a deletion trigger — see CpcbRecyclerRefreshService. */
+    @Column(name = "no_longer_listed_at", nullable = true)
+    val noLongerListedAt: Instant? = null
 )
 
 @Entity

@@ -1,8 +1,10 @@
 package com.rorapps.eprid.dto.cpcbdirectory
 
+import com.rorapps.eprid.entity.RefreshRunStatus
 import com.rorapps.eprid.entity.RiskRating
 import com.rorapps.eprid.entity.ScoreConfidence
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
 
 /** Customer-facing search result. Deliberately excludes authorizedName/Email/Mobile (PII of an
@@ -26,7 +28,10 @@ data class CpcbRecyclerSearchResult(
     val authorizations: List<CpcbAuthorizationDto>,
     val dataQualityPartialCapture: Boolean,
     val dataQualityNotes: String?,
-    val latestScore: CpcbRecyclerScoreDto?
+    val latestScore: CpcbRecyclerScoreDto?,
+    /** "Data as of..." — feature_spec_cpcb_directory_refresh.md §4. Null until this row has been
+     *  through at least one live refresh pull (manual-CSV-only rows stay null). */
+    val lastSyncedAt: Instant?
 )
 
 data class CpcbStateDto(
@@ -55,4 +60,33 @@ data class CpcbIngestionSummaryDto(
     val rowsFlaggedPartialCapture: Int,
     val rowsMissingSourceId: Int,
     val errors: List<String>
+)
+
+data class CpcbRefreshRunSummaryDto(
+    val id: String,
+    val startedAt: Instant,
+    val completedAt: Instant?,
+    val recordsFetched: Int,
+    val recordsChanged: Int,
+    val recordsNew: Int,
+    val recordsMissing: Int,
+    val status: RefreshRunStatus,
+    val errorDetail: String?
+)
+
+data class CpcbRecyclerSnapshotDiffDto(
+    val fieldName: String,
+    val oldValue: String?,
+    val newValue: String?,
+    val detectedAt: Instant
+)
+
+/** One row in the §4 review gate — a recycler whose risk band changed on the last refresh that
+ *  touched it and hasn't been glanced at by an admin yet. */
+data class CpcbPendingReviewItemDto(
+    val id: String,
+    val cpcbId: String?,
+    val recyclerName: String,
+    val latestScore: CpcbRecyclerScoreDto?,
+    val recentDiffs: List<CpcbRecyclerSnapshotDiffDto>
 )

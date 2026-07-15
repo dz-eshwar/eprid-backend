@@ -8,6 +8,10 @@ import org.springframework.data.repository.query.Param
 interface CpcbRecyclerRepository : JpaRepository<CpcbRecycler, String> {
     fun findByCpcbId(cpcbId: String): CpcbRecycler?
 
+    fun findAllByPendingReviewTrue(): List<CpcbRecycler>
+
+    fun findAllByCpcbIdIsNotNull(): List<CpcbRecycler>
+
     // Explicit CAST on each nullable param — without it, Hibernate/pgjdbc can infer a bare `:name`
     // bound to null as bytea (not text), and Postgres then rejects LOWER(bytea) even though the
     // `IS NULL` branch would short-circuit logically. Reproduced with all three params blank

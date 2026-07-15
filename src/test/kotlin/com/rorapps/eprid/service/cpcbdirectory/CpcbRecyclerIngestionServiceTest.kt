@@ -6,7 +6,8 @@ import java.math.BigDecimal
 import java.time.LocalDate
 
 /** Tests the partial-capture blank-count heuristic in isolation, against the exact real rows the
- *  task's test cases reference — no Spring context / DB needed for this. */
+ *  task's test cases reference — no Spring context / DB needed for this. Logic lives in
+ *  [CpcbRecyclerRowMapper] (shared by CSV ingestion and the live refresh pull). */
 class CpcbRecyclerIngestionServiceTest {
 
     private fun row(
@@ -27,13 +28,13 @@ class CpcbRecyclerIngestionServiceTest {
     @Test
     fun `a well-captured row with only two blanks is not partial capture`() {
         // mirrors Gotech / Mohd Shahid shape: only recycler_type and capacity blank
-        assertFalse(CpcbRecyclerIngestionService.isPartialCapture(row()))
+        assertFalse(CpcbRecyclerRowMapper.isPartialCapture(row()))
     }
 
     @Test
     fun `a row missing only GST is not partial capture — GST-missing should flag for real`() {
         // mirrors Mohd Zahid / Santosh
-        assertFalse(CpcbRecyclerIngestionService.isPartialCapture(row(gst = null)))
+        assertFalse(CpcbRecyclerRowMapper.isPartialCapture(row(gst = null)))
     }
 
     @Test
@@ -43,8 +44,8 @@ class CpcbRecyclerIngestionServiceTest {
             recyclerType = "R2: ...#,R3: ...#,R4: ...", capacity = BigDecimal("7380"),
             lat = null, lon = null, staff = 0, worker = null
         )
-        assertEquals(7, CpcbRecyclerIngestionService.blankFieldCount(attero))
-        assertTrue(CpcbRecyclerIngestionService.isPartialCapture(attero))
+        assertEquals(7, CpcbRecyclerRowMapper.blankFieldCount(attero))
+        assertTrue(CpcbRecyclerRowMapper.isPartialCapture(attero))
     }
 
     @Test
@@ -53,20 +54,20 @@ class CpcbRecyclerIngestionServiceTest {
             gst = "08AAACG6753F1ZM", consentAir = null, consentWater = null, hwmd = null,
             recyclerType = null, capacity = null, lat = null, lon = null, staff = null, worker = null
         )
-        assertEquals(9, CpcbRecyclerIngestionService.blankFieldCount(gravita))
-        assertTrue(CpcbRecyclerIngestionService.isPartialCapture(gravita))
+        assertEquals(9, CpcbRecyclerRowMapper.blankFieldCount(gravita))
+        assertTrue(CpcbRecyclerRowMapper.isPartialCapture(gravita))
     }
 
     @Test
     fun `real India coordinates are plausible`() {
         // Gravita's Rajasthan facility (id 126)
-        assertTrue(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("26.63024"), BigDecimal("75.66822")))
+        assertTrue(CpcbRecyclerRowMapper.isPlausibleIndiaGeo(BigDecimal("26.63024"), BigDecimal("75.66822")))
     }
 
     @Test
     fun `swapped-scale garbage coordinates from the source are rejected, not geocoded`() {
         // id 250 in the 2026-07-08 pull — six-figure values, not real lat/lng at all
-        assertFalse(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("193521.3"), BigDecimal("731013.0")))
+        assertFalse(CpcbRecyclerRowMapper.isPlausibleIndiaGeo(BigDecimal("193521.3"), BigDecimal("731013.0")))
     }
 
     @Test
@@ -74,7 +75,7 @@ class CpcbRecyclerIngestionServiceTest {
         // id 644 in the 2026-07-08 pull — 24.19282,55.75506 reads like a real coordinate pair,
         // just not one inside India (roughly UAE) — must fail the India bounds check, not pass
         // because both numbers individually look like plausible lat/lng magnitudes.
-        assertFalse(CpcbRecyclerIngestionService.isPlausibleIndiaGeo(BigDecimal("24.19282"), BigDecimal("55.75506")))
+        assertFalse(CpcbRecyclerRowMapper.isPlausibleIndiaGeo(BigDecimal("24.19282"), BigDecimal("55.75506")))
     }
 
     @Test
@@ -84,13 +85,13 @@ class CpcbRecyclerIngestionServiceTest {
             recyclerAddress = "ABC",
             authorizedName = "TESTING P"
         )
-        assertTrue(CpcbRecyclerIngestionService.isLikelyTestRow(reliance))
+        assertTrue(CpcbRecyclerRowMapper.isLikelyTestRow(reliance))
     }
 
     @Test
     fun `a legitimately short address alone does not trigger the test-row flag`() {
         // id 317 in the 2026-07-08 pull — "E/15" is a real short plot address, not placeholder data
         val rocklink = row().copy(recyclerAddress = "E/15", authorizedName = "Real Person")
-        assertFalse(CpcbRecyclerIngestionService.isLikelyTestRow(rocklink))
+        assertFalse(CpcbRecyclerRowMapper.isLikelyTestRow(rocklink))
     }
 }
