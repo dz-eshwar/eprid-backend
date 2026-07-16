@@ -14,7 +14,10 @@ import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import com.rorapps.eprid.repository.CpcbRecyclerAuthorizationRepository
 import com.rorapps.eprid.repository.CpcbRecyclerRepository
 import com.rorapps.eprid.repository.CpcbRecyclerSnapshotDiffRepository
@@ -35,9 +38,17 @@ class CpcbRecyclerRefreshService(
     private val scoringService: CpcbRecyclerScoringService,
     private val refreshRunRepository: CpcbRefreshRunRepository,
     private val diffRepository: CpcbRecyclerSnapshotDiffRepository,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    txManager: PlatformTransactionManager
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /** REQUIRES_NEW per row: one bad row (constraint violation, bad data) must not mark the
+     *  whole-run transaction rollback-only and cascade-fail every row after it. Each row commits
+     *  or rolls back on its own. */
+    private val rowTransactionTemplate = TransactionTemplate(txManager).apply {
+        propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
+    }
 
     companion object {
         /** Fields that feed scoring (§2) — cosmetic fields (phone, email, address formatting) are
@@ -98,45 +109,53 @@ class CpcbRecyclerRefreshService(
         for (row in rows) {
             try {
                 row.cpcbId?.let { seenCpcbIds += it }
-                val existing = row.cpcbId?.let { recyclerRepository.findByCpcbId(it) }
-                val mapped = CpcbRecyclerRowMapper.toEntity(row, existing)
-                val diffs = if (existing != null) diffTrackedFields(existing, mapped.entity) else emptyList()
+                var wasNew = false
+                var wasChanged = false
 
-                val saved = recyclerRepository.save(
-                    mapped.entity.copy(lastSyncedAt = Instant.now(), noLongerListedAt = null)
-                )
+                rowTransactionTemplate.execute {
+                    val existing = row.cpcbId?.let { recyclerRepository.findByCpcbId(it) }
+                    val mapped = CpcbRecyclerRowMapper.toEntity(row, existing)
+                    val diffs = if (existing != null) diffTrackedFields(existing, mapped.entity) else emptyList()
 
-                authorizationRepository.deleteAllByRecyclerId(saved.id!!)
-                CpcbRecyclerCsvParser.parseAuthorizations(row.recyclerTypeRaw).forEach { auth ->
-                    authorizationRepository.save(
-                        CpcbRecyclerAuthorization(recycler = saved, categoryCode = auth.categoryCode, categoryLabel = auth.categoryLabel)
+                    val saved = recyclerRepository.save(
+                        mapped.entity.copy(lastSyncedAt = Instant.now(), noLongerListedAt = null)
                     )
-                }
 
-                if (existing == null) {
-                    new++
-                } else if (diffs.isNotEmpty()) {
-                    changed++
-                    diffs.forEach { (field, oldVal, newVal) ->
-                        diffRepository.save(
-                            CpcbRecyclerSnapshotDiff(
-                                recyclerId = saved.id!!, refreshRunId = run.id!!,
-                                fieldName = field, oldValue = oldVal, newValue = newVal
-                            )
+                    authorizationRepository.deleteAllByRecyclerId(saved.id!!)
+                    CpcbRecyclerCsvParser.parseAuthorizations(row.recyclerTypeRaw).forEach { auth ->
+                        authorizationRepository.save(
+                            CpcbRecyclerAuthorization(recycler = saved, categoryCode = auth.categoryCode, categoryLabel = auth.categoryLabel)
                         )
                     }
-                }
 
-                // Sub-score movement that doesn't cross a band boundary applies automatically;
-                // a band flip gates behind pendingReview (§4) — only recompute when something
-                // tracked actually changed, so an unchanged run touches no recycler's score.
-                if (existing == null || diffs.isNotEmpty()) {
-                    val previousBand = scoringService.latestScore(saved.id!!)?.riskBand
-                    val newScore = scoringService.scoreAndSave(saved)
-                    if (previousBand != null && previousBand != newScore.riskBand) {
-                        recyclerRepository.save(saved.copy(pendingReview = true))
+                    if (existing == null) {
+                        wasNew = true
+                    } else if (diffs.isNotEmpty()) {
+                        wasChanged = true
+                        diffs.forEach { (field, oldVal, newVal) ->
+                            diffRepository.save(
+                                CpcbRecyclerSnapshotDiff(
+                                    recyclerId = saved.id!!, refreshRunId = run.id!!,
+                                    fieldName = field, oldValue = oldVal, newValue = newVal
+                                )
+                            )
+                        }
+                    }
+
+                    // Sub-score movement that doesn't cross a band boundary applies automatically;
+                    // a band flip gates behind pendingReview (§4) — only recompute when something
+                    // tracked actually changed, so an unchanged run touches no recycler's score.
+                    if (existing == null || diffs.isNotEmpty()) {
+                        val previousBand = scoringService.latestScore(saved.id!!)?.riskBand
+                        val newScore = scoringService.scoreAndSave(saved)
+                        if (previousBand != null && previousBand != newScore.riskBand) {
+                            recyclerRepository.save(saved.copy(pendingReview = true))
+                        }
                     }
                 }
+
+                if (wasNew) new++
+                if (wasChanged) changed++
             } catch (e: Exception) {
                 log.error("CPCB refresh failed for row '${row.recyclerName}'", e)
                 errors += "${row.recyclerName}: ${e.message}"
