@@ -63,8 +63,16 @@ class VaultService(
     }
 
     @Transactional(readOnly = true)
-    fun listForRecycler(recyclerId: String, requestedBy: User): List<VaultDocumentResponse> =
-        vaultRepository.findActiveByRecyclerId(recyclerId).map { it.toResponse() }
+    fun listForRecycler(recyclerId: String, requestedBy: User): List<VaultDocumentResponse> {
+        val docs = vaultRepository.findActiveByRecyclerId(recyclerId)
+        val isOwningRecycler = requestedBy.role == UserRole.RECYCLER &&
+            recyclerRepository.findByUserId(requestedBy.id!!)?.id == recyclerId
+        // Only the recycler who owns this recyclerId gets the full list; everyone else
+        // (e.g. consultants/producers who learned the recyclerId from an unrelated check)
+        // only sees documents they personally uploaded — prevents cross-tenant IDOR.
+        return (if (isOwningRecycler) docs else docs.filter { it.uploadedBy.id == requestedBy.id })
+            .map { it.toResponse() }
+    }
 
     @Transactional(readOnly = true)
     fun listForUser(userId: String): List<VaultDocumentResponse> =

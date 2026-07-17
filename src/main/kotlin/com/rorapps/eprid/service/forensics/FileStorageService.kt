@@ -18,9 +18,15 @@ class FileStorageService(
 
     fun store(checkId: String, file: MultipartFile): Path {
         val dir = root.resolve(checkId).also { Files.createDirectories(it) }
-        val ext = file.originalFilename?.substringAfterLast('.', "") ?: ""
+        // Sanitize: keep only a short alphanumeric extension. The raw client-supplied
+        // originalFilename must never reach Path.resolve() — a crafted name such as
+        // "x.png/../../../../etc/whatever" would otherwise inject path separators and
+        // ".." segments into the stored path, escaping the per-check upload directory.
+        val rawExt = file.originalFilename?.substringAfterLast('.', "") ?: ""
+        val ext = rawExt.filter { it.isLetterOrDigit() }.take(10)
         val filename = "${UUID.randomUUID()}${if (ext.isNotEmpty()) ".$ext" else ""}"
-        val target = dir.resolve(filename)
+        val target = dir.resolve(filename).normalize()
+        require(target.startsWith(dir)) { "Invalid file name" }
         file.inputStream.use { Files.copy(it, target) }
         return target
     }

@@ -1,6 +1,7 @@
 package com.rorapps.eprid.config
 
 import com.rorapps.eprid.filter.JwtAuthFilter
+import com.rorapps.eprid.filter.RequestLoggingFilter
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -20,6 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 @EnableMethodSecurity
 class SecurityConfig(
     private val jwtAuthFilter: JwtAuthFilter,
+    private val requestLoggingFilter: RequestLoggingFilter,
     private val authenticationProvider: AuthenticationProvider,
     @Value("\${app.cors.allowed-origins}")
     private val allowedOrigins: List<String>
@@ -31,6 +33,7 @@ class SecurityConfig(
             allowedOrigins = this@SecurityConfig.allowedOrigins
             allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
             allowedHeaders = listOf("*")
+            exposedHeaders = listOf("X-Request-Id")
             allowCredentials = true
             maxAge = 3600L
         }
@@ -60,6 +63,7 @@ class SecurityConfig(
             }
             .authenticationProvider(authenticationProvider)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter::class.java)
+            .addFilterBefore(requestLoggingFilter, JwtAuthFilter::class.java)
 
         return http.build()
     }
