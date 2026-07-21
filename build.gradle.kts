@@ -120,9 +120,14 @@ jacoco {
 }
 
 flyway {
-    url = System.getenv("DB_URL") ?: error("DB_URL env var not set")
-    user = System.getenv("DB_USERNAME") ?: error("DB_USERNAME env var not set")
-    password = System.getenv("DB_PASSWORD") ?: error("DB_PASSWORD env var not set")
+    // Deliberately no fail-fast here: this block is evaluated at Gradle CONFIGURATION time for
+    // EVERY task, including bootJar/compileKotlin — which is all a Docker build stage runs, and
+    // which never has runtime env vars available (only the running container does). Erroring here
+    // broke every fresh image build. Leave these null when unset; the flyway plugin itself throws
+    // a clear connection error only when a flywayMigrate/flywayInfo task actually runs.
+    url = System.getenv("DB_URL")
+    user = System.getenv("DB_USERNAME")
+    password = System.getenv("DB_PASSWORD")
     locations = arrayOf("filesystem:src/main/resources/db/migration")
     cleanDisabled = false
     driver = "org.postgresql.Driver"
