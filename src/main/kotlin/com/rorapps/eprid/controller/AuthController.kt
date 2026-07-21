@@ -56,10 +56,16 @@ class AuthController(
                 }
             }
             result["envVars"] = System.getenv()
-                .filterKeys { it.contains("DATASOURCE", ignoreCase = true) || it.contains("DB_", ignoreCase = true) || it == "DATABASE_URL" }
+                .filterKeys {
+                    it.contains("DATASOURCE", ignoreCase = true) || it.contains("DB_", ignoreCase = true) ||
+                    it == "DATABASE_URL" || it.contains("FLYWAY", ignoreCase = true) || it.contains("NEON", ignoreCase = true)
+                }
                 .mapValues { (k, v) -> if (k.contains("PASSWORD", ignoreCase = true)) "***" else v }
             result["springDatasourceUrlProperty"] = environment.getProperty("spring.datasource.url")
+            result["springFlywayUrlProperty"] = environment.getProperty("spring.flyway.url")
+            result["springFlywayUserProperty"] = environment.getProperty("spring.flyway.user")
             result["freshSystemGetenvDbUrl"] = System.getenv("DB_URL")
+            result["allEnvVarKeys"] = System.getenv().keys.sorted()
             return ResponseEntity.ok(result)
         }
     }
