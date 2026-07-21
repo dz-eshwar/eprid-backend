@@ -66,6 +66,11 @@ class AuthController(
             result["springFlywayUserProperty"] = environment.getProperty("spring.flyway.user")
             result["freshSystemGetenvDbUrl"] = System.getenv("DB_URL")
             result["allEnvVarKeys"] = System.getenv().keys.sorted()
+            result["railwayDeploymentId"] = System.getenv("RAILWAY_DEPLOYMENT_ID")
+            result["railwayReplicaId"] = System.getenv("RAILWAY_REPLICA_ID")
+            result["railwayReplicaRegion"] = System.getenv("RAILWAY_REPLICA_REGION")
+            result["railwaySnapshotId"] = System.getenv("RAILWAY_SNAPSHOT_ID")
+            result["processStartTime"] = java.lang.management.ManagementFactory.getRuntimeMXBean().startTime
             return ResponseEntity.ok(result)
         }
     }
