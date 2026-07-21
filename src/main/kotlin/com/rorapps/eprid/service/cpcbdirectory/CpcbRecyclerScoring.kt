@@ -6,7 +6,10 @@ import com.rorapps.eprid.entity.CpcbRecyclerAuthorization
 import com.rorapps.eprid.entity.RiskRating
 import com.rorapps.eprid.entity.ScoreConfidence
 import java.math.BigDecimal
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -67,18 +70,32 @@ object CpcbRecyclerScoring {
         // ── Registration / authorization health ────────────────────────────────────────────
         val registrationBreakdown = mutableMapOf<String, Any?>()
 
-        val consentExpired = listOfNotNull(recycler.consentAirExpiry, recycler.consentWaterExpiry)
-            .any { it.isBefore(today) }
+        // "Data as of" — CPCB's own last-touched timestamp for this row if we have it, else our
+        // own last refresh pull, else the original ingest. Every flag sourced from a self-reported
+        // registration field below cites this so a reader knows how fresh the underlying claim is,
+        // not just that it's sourced (see CpcbRecycler.lastSyncedAt's doc comment — this is that
+        // "surface it anywhere a score is shown externally" instruction, applied).
+        val dataAsOf = formatInstant(recycler.sourceUpdatedAt ?: recycler.lastSyncedAt ?: recycler.ingestedAt)
+        val provenanceNote = "self-reported at registration on CPCB's portal, data as of $dataAsOf — " +
+            "not independently confirmed against the state Pollution Control Board"
+
+        val expiredConsentDates = listOfNotNull(
+            recycler.consentAirExpiry?.takeIf { it.isBefore(today) }?.let { "air: $it" },
+            recycler.consentWaterExpiry?.takeIf { it.isBefore(today) }?.let { "water: $it" }
+        )
+        val consentExpired = expiredConsentDates.isNotEmpty()
         if (consentExpired) {
             points += EXPIRED_CONSENT_POINTS
-            flags += "Expired Consent-to-Operate (air and/or water)"
+            flags += "CPCB's registration portal lists Consent-to-Operate as expired " +
+                "(${expiredConsentDates.joinToString(", ")}) — $provenanceNote"
         }
         registrationBreakdown["consentExpired"] = consentExpired
 
         val hwmdExpired = recycler.hwmdValidExpiry?.isBefore(today) == true
         if (hwmdExpired) {
             points += EXPIRED_HWMD_POINTS
-            flags += "Expired Hazardous Waste Management authorization"
+            flags += "CPCB's registration portal lists Hazardous Waste Management authorization " +
+                "as expired since ${recycler.hwmdValidExpiry} — $provenanceNote"
         }
         registrationBreakdown["hwmdExpired"] = hwmdExpired
 
@@ -185,6 +202,14 @@ object CpcbRecyclerScoring {
             )
         )
     }
+
+    /** Renders an Instant as a plain yyyy-MM-dd date, UTC — matches the ISO date style already
+     *  used everywhere else a CPCB-sourced date appears (consentAirExpiry etc. are LocalDate and
+     *  print the same way). Callers resolve the sourceUpdatedAt/lastSyncedAt/ingestedAt fallback
+     *  chain to a non-null Instant before calling this — ingestedAt is always present, so there's
+     *  no "unknown" case to handle here. */
+    private fun formatInstant(instant: Instant): String =
+        DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC).format(instant)
 
     /** Great-circle distance in km — hotspot match is a point+radius proxy for a district, not
      *  real boundary data (see the migration's comment on cpcb_geo_risk_hotspots). */

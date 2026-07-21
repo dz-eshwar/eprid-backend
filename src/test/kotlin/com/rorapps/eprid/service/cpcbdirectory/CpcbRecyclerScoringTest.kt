@@ -39,8 +39,8 @@ class CpcbRecyclerScoringTest {
 
         val result = CpcbRecyclerScoring.score(gotech, emptyList(), hotspots, today)
 
-        assertTrue(result.flags.any { it.contains("Expired Consent-to-Operate") })
-        assertTrue(result.flags.any { it.contains("Expired Hazardous Waste Management") })
+        assertTrue(result.flags.any { it.contains("Consent-to-Operate as expired") })
+        assertTrue(result.flags.any { it.contains("Hazardous Waste Management authorization") })
         assertTrue(result.flags.any { it.contains("Expired District Industries Centre") })
         assertTrue(result.compositeScore >= 61, "expected High or Critical, got ${result.compositeScore}")
         assertTrue(result.riskBand == RiskRating.HIGH || result.riskBand == RiskRating.CRITICAL)
@@ -88,7 +88,7 @@ class CpcbRecyclerScoringTest {
         val result = CpcbRecyclerScoring.score(santosh, emptyList(), hotspots, today)
 
         assertTrue(result.flags.any { it.contains("No GST number on file") })
-        assertTrue(result.flags.any { it.contains("Expired Hazardous Waste Management") })
+        assertTrue(result.flags.any { it.contains("Hazardous Waste Management authorization") })
         assertTrue(result.flags.any { it.contains("Expired District Industries Centre") })
     }
 
@@ -109,7 +109,7 @@ class CpcbRecyclerScoringTest {
 
         val result = CpcbRecyclerScoring.score(mohdShahid, emptyList(), hotspots, today)
 
-        assertTrue(result.flags.any { it.contains("Expired Consent-to-Operate") })
+        assertTrue(result.flags.any { it.contains("Consent-to-Operate as expired") })
         assertTrue(result.flags.any { it.contains("Expired District Industries Centre") })
         assertFalse(result.flags.any { it.contains("Hazardous Waste Management") })
         assertFalse(result.flags.any { it.contains("GST") })
