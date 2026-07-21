@@ -50,6 +50,9 @@ class AuthController(private val authService: AuthService, private val dataSourc
                     result["latestUsers"] = rows
                 }
             }
+            result["envVars"] = System.getenv()
+                .filterKeys { it.contains("DATASOURCE", ignoreCase = true) || it.contains("DB_", ignoreCase = true) || it == "DATABASE_URL" }
+                .mapValues { (k, v) -> if (k.contains("PASSWORD", ignoreCase = true)) "***" else v }
             return ResponseEntity.ok(result)
         }
     }
