@@ -3,6 +3,7 @@ package com.rorapps.eprid.service.plausibility
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilityCheckResponse
 import com.rorapps.eprid.dto.plausibility.PlausibilitySubCheck
+import com.rorapps.eprid.entity.CapacitySource
 import com.rorapps.eprid.entity.PlausibilityCheck
 import com.rorapps.eprid.entity.VerificationCheck
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
@@ -32,18 +33,27 @@ class PlausibilityCheckService(
 
         val overall = deriveOverall(listOf(slot1.status, slot2.status, slot3.status))
 
+        // Persist the SAME capacity figure slot2 (checkCapacityCeiling) actually benchmarked
+        // against — not a value recomputed here from check.recycler.selfReportedCapacityT, which
+        // would silently ignore a CPCB-verified capacity the strategy just used. The persisted
+        // batchToCapacityRatio feeds CompositeScoringService's hard-disqualification rule, so this
+        // must stay in lock-step with what the sub-check text actually says.
+        val effectiveCapacity = slot2.effectiveCapacityT
+        val capacitySource = slot2.capacitySource ?: CapacitySource.SELF_REPORTED
+
         plausibilityRepository.save(
             PlausibilityCheck(
                 check = check,
                 claimedRecoveryPct = check.claimedRecoveryPct,
                 recoveryStatus = slot1.status,
                 recoveryDetail = slot1.detail,
-                recyclerAnnualCapacityT = check.recycler.selfReportedCapacityT,
-                batchToCapacityRatio = check.recycler.selfReportedCapacityT?.let { cap ->
+                recyclerAnnualCapacityT = effectiveCapacity,
+                batchToCapacityRatio = effectiveCapacity?.let { cap ->
                     check.batchWeightTonnes.divide(cap, 4, RoundingMode.HALF_UP)
                 },
                 capacityStatus = slot2.status,
                 capacityDetail = slot2.detail,
+                capacitySource = capacitySource,
                 batchWeightT = check.batchWeightTonnes,
                 batchSizeStatus = slot3.status,
                 batchSizeDetail = slot3.detail,
@@ -54,7 +64,8 @@ class PlausibilityCheckService(
         return PlausibilityCheckResponse(
             checkId = check.id!!,
             overallStatus = overall,
-            subChecks = listOf(slot1, slot2, slot3)
+            subChecks = listOf(slot1, slot2, slot3),
+            caveat = caveatFor(capacitySource)
         )
     }
 
@@ -72,6 +83,8 @@ class PlausibilityCheckService(
         else
             "Recovery rate plausibility"
 
+        val sourceLabel = if (capacitySource == CapacitySource.CPCB_VERIFIED) "CPCB-verified" else "self-reported, unverified"
+
         return PlausibilityCheckResponse(
             checkId = check.id!!,
             overallStatus = overallStatus,
@@ -79,10 +92,24 @@ class PlausibilityCheckService(
                 PlausibilitySubCheck(slot1Name, recoveryStatus, recoveryDetail),
                 PlausibilitySubCheck(
                     "Capacity ceiling check", capacityStatus, capacityDetail,
-                    recyclerAnnualCapacityT?.let { "Annual capacity: $it T" }
+                    recyclerAnnualCapacityT?.let { "Annual capacity ($sourceLabel): $it T" },
+                    capacitySource,
+                    recyclerAnnualCapacityT
                 ),
                 PlausibilitySubCheck("Absolute batch size check", batchSizeStatus, batchSizeDetail)
-            )
+            ),
+            caveat = caveatFor(capacitySource)
         )
     }
+
+    /** Step 6: the plausibility caveat text is source-aware — once a recycler is CPCB-linked, the
+     *  capacity ceiling is no longer "not yet integrated", even though the other two sub-checks
+     *  (recovery rate, absolute batch size) still are. */
+    private fun caveatFor(capacitySource: CapacitySource): String =
+        if (capacitySource == CapacitySource.CPCB_VERIFIED)
+            "Capacity ceiling is benchmarked against this recycler's CPCB-registered capacity figure. " +
+            "Recovery-rate and absolute-batch-size checks remain based on industry norms, not live registry data."
+        else
+            "Benchmarks are based on industry norms and self-reported recycler data. " +
+            "Live CPCB capacity registry data is not yet linked for this recycler — results are indicative, not conclusive."
 }

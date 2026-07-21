@@ -18,6 +18,7 @@ import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import com.rorapps.eprid.repository.ProducerRepository
 import com.rorapps.eprid.repository.RecyclerRepository
 import com.rorapps.eprid.repository.VerificationCheckRepository
+import com.rorapps.eprid.service.cpcbdirectory.CpcbRecyclerLinkService
 import com.rorapps.eprid.service.plausibility.BatteryCompositionCheckService
 import com.rorapps.eprid.service.plausibility.PlausibilityCheckService
 import org.springframework.stereotype.Service
@@ -34,12 +35,17 @@ class VerificationCheckService(
     private val compositeScoringService: CompositeScoringService,
     private val claimedMetalRecoveryRepository: ClaimedMetalRecoveryRepository,
     private val batteryCompositionCheckService: BatteryCompositionCheckService,
-    private val metalCompositionCheckRepository: MetalCompositionCheckRepository
+    private val metalCompositionCheckRepository: MetalCompositionCheckRepository,
+    private val cpcbRecyclerLinkService: CpcbRecyclerLinkService
 ) {
 
     @Transactional
     fun createCheck(request: CreateCheckRequest, requestedBy: User): VerificationCheckResponse {
         val recycler = upsertRecycler(request)
+        // Step 3.1: surface a CPCB-directory match candidate as soon as a Recycler row exists —
+        // never auto-links (CpcbRecyclerLinkService's own doc explains why), so this can't affect
+        // the check about to run. No-op if already linked or no candidates found.
+        cpcbRecyclerLinkService.generateSuggestions(recycler.id!!)
         val producer = upsertProducer(request, requestedBy)
 
         val check = checkRepository.save(

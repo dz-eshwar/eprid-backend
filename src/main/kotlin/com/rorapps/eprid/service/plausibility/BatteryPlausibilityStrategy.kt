@@ -5,19 +5,23 @@ import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilitySubCheck
 import com.rorapps.eprid.entity.SubCheckStatus
 import com.rorapps.eprid.entity.VerificationCheck
+import com.rorapps.eprid.repository.CpcbRecyclerRepository
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
 /** Battery plausibility logic — extracted verbatim from the original PlausibilityCheckService. */
 @Component
-class BatteryPlausibilityStrategy : PlausibilityStrategy {
+class BatteryPlausibilityStrategy(
+    private val cpcbRecyclerRepository: CpcbRecyclerRepository
+) : PlausibilityStrategy {
 
     override fun supports(wasteStream: WasteStreamType) = wasteStream == WasteStreamType.BATTERY
 
     override fun runChecks(check: VerificationCheck): List<PlausibilitySubCheck> {
+        val (capacityT, capacitySource) = resolveEffectiveCapacity(check.recycler, cpcbRecyclerRepository)
         val recovery  = checkRecoveryRate(check.claimedRecoveryPct)
-        val capacity  = checkCapacityCeiling(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
-        val batchSize = checkAbsoluteBatchSize(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
+        val capacity  = checkCapacityCeiling(check.batchWeightTonnes, capacityT, capacitySource)
+        val batchSize = checkAbsoluteBatchSize(check.batchWeightTonnes, capacityT)
         return listOf(recovery, capacity, batchSize)
     }
 

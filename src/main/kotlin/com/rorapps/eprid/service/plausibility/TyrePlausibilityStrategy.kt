@@ -5,6 +5,7 @@ import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.dto.plausibility.PlausibilitySubCheck
 import com.rorapps.eprid.entity.SubCheckStatus
 import com.rorapps.eprid.entity.VerificationCheck
+import com.rorapps.eprid.repository.CpcbRecyclerRepository
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -19,14 +20,17 @@ import java.math.RoundingMode
  * TPO-yield-ratio benchmark, which the PRD explicitly superseded as an unverified estimate.
  */
 @Component
-class TyrePlausibilityStrategy : PlausibilityStrategy {
+class TyrePlausibilityStrategy(
+    private val cpcbRecyclerRepository: CpcbRecyclerRepository
+) : PlausibilityStrategy {
 
     override fun supports(wasteStream: WasteStreamType) = wasteStream == WasteStreamType.TYRE
 
     override fun runChecks(check: VerificationCheck): List<PlausibilitySubCheck> {
+        val (capacityT, capacitySource) = resolveEffectiveCapacity(check.recycler, cpcbRecyclerRepository)
         val reconciliation = checkEprCreditReconciliation(check)
-        val capacity        = checkCapacityCeiling(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
-        val batchSize        = checkAbsoluteBatchSize(check.batchWeightTonnes, check.recycler.selfReportedCapacityT)
+        val capacity        = checkCapacityCeiling(check.batchWeightTonnes, capacityT, capacitySource)
+        val batchSize        = checkAbsoluteBatchSize(check.batchWeightTonnes, capacityT)
         return listOf(reconciliation, capacity, batchSize)
     }
 

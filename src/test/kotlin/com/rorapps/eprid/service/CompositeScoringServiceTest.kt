@@ -67,7 +67,11 @@ class CompositeScoringServiceTest {
         processingDate = LocalDate.now()
     )
 
-    private fun plausibility(overallStatus: SubCheckStatus, ratio: BigDecimal? = null) = PlausibilityCheck(
+    private fun plausibility(
+        overallStatus: SubCheckStatus,
+        ratio: BigDecimal? = null,
+        capacitySource: CapacitySource = CapacitySource.CPCB_VERIFIED
+    ) = PlausibilityCheck(
         id = "pl1",
         check = makeCheck(),
         claimedRecoveryPct = BigDecimal("75"),
@@ -77,6 +81,7 @@ class CompositeScoringServiceTest {
         batchToCapacityRatio = ratio,
         capacityStatus = SubCheckStatus.PASS,
         capacityDetail = "ok",
+        capacitySource = capacitySource,
         batchWeightT = BigDecimal("100"),
         batchSizeStatus = SubCheckStatus.PASS,
         batchSizeDetail = "ok",
@@ -178,6 +183,17 @@ class CompositeScoringServiceTest {
         assertEquals(100, result.compositeScore)
         assertEquals(RiskRating.CRITICAL, result.riskRating)
         assertNotNull(result.hardDisqualificationReason)
+    }
+
+    @Test
+    fun `capacity ratio over 3x on self-reported data alone does not hard-disqualify`() {
+        // Self-reported capacity is gameable (a dishonest recycler can just enter a bigger
+        // number) — the >3x rule must only fire once the ceiling was benchmarked against the
+        // CPCB-registered figure.
+        whenever(plausibilityRepository.findByCheckId("c1"))
+            .thenReturn(plausibility(SubCheckStatus.FAIL, ratio = BigDecimal("3.5"), capacitySource = CapacitySource.SELF_REPORTED))
+        val result = service.recomputeAndSave(makeCheck())
+        assertFalse(result.hardDisqualified)
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.rorapps.eprid.service.plausibility
 import com.rorapps.eprid.constants.TyreEndProduct
 import com.rorapps.eprid.constants.WasteStreamType
 import com.rorapps.eprid.entity.*
+import com.rorapps.eprid.repository.CpcbRecyclerRepository
 import com.rorapps.eprid.repository.PlausibilityCheckRepository
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -13,8 +14,14 @@ import java.time.LocalDate
 
 class PlausibilityCheckServiceTest {
 
-    private val repo    = mock<PlausibilityCheckRepository>()
-    private val service = PlausibilityCheckService(repo, listOf(BatteryPlausibilityStrategy(), TyrePlausibilityStrategy()))
+    private val repo = mock<PlausibilityCheckRepository>()
+    // Every test recycler here is unlinked (cpcbRecyclerId = null), so resolveEffectiveCapacity
+    // never reaches this repository — an unstubbed mock is safe.
+    private val cpcbRecyclerRepository = mock<CpcbRecyclerRepository>()
+    private val service = PlausibilityCheckService(
+        repo,
+        listOf(BatteryPlausibilityStrategy(cpcbRecyclerRepository), TyrePlausibilityStrategy(cpcbRecyclerRepository))
+    )
 
     @BeforeEach
     fun setup() {
@@ -175,6 +182,50 @@ class PlausibilityCheckServiceTest {
         val result = service.runAndSave(makeCheck("500", "75", annualCapacityT = "1000"))
         val sub = result.subChecks.first { it.name == "Capacity ceiling check" }
         assertEquals(SubCheckStatus.WARN, sub.status)
+    }
+
+    @Test
+    fun `linked recycler uses CPCB-registered capacity instead of self-reported`() {
+        // Real figure confirmed against the live CPCB directory: Gravita India Limited,
+        // cpcb_id=126, recycling_capacity=40000.00 (see V22 rollout verification).
+        val cpcbRecycler = CpcbRecycler(id = "cpcb126", cpcbId = "126", recyclerName = "GRAVITA INDIA LIMITED", recyclingCapacity = BigDecimal("40000.00"))
+        whenever(cpcbRecyclerRepository.findById("cpcb126")).thenReturn(java.util.Optional.of(cpcbRecycler))
+
+        val user = User(id = "u1", email = "x@x.com", fullName = "X", passwordHash = "", role = UserRole.CONSULTANT)
+        val recycler = Recycler(
+            id = "r1", name = "Test Recycler",
+            selfReportedCapacityT = BigDecimal("500"), // deliberately much smaller — must NOT be used
+            cpcbRecyclerId = "cpcb126"
+        )
+        val producer = Producer(id = "p1", name = "Test Producer", createdBy = user)
+        val check = VerificationCheck(
+            id = "c1", producer = producer, recycler = recycler, requestedBy = user,
+            batchWeightTonnes = BigDecimal("16000"), // 40% of 40,000 -> PASS; would be a 32x-capacity FAIL against the self-reported 500
+            claimedRecoveryPct = BigDecimal("75"), processingDate = LocalDate.now()
+        )
+
+        val result = service.runAndSave(check)
+        val sub = result.subChecks.first { it.name == "Capacity ceiling check" }
+        assertEquals(SubCheckStatus.PASS, sub.status)
+        assertEquals(CapacitySource.CPCB_VERIFIED, sub.capacitySource)
+        assertEquals(BigDecimal("40000.00"), sub.effectiveCapacityT)
+        assertTrue(sub.detail.contains("CPCB-verified"))
+    }
+
+    @Test
+    fun `linked recycler with no CPCB capacity on file falls back to self-reported, labeled as such`() {
+        val cpcbRecycler = CpcbRecycler(id = "cpcb999", recyclerName = "NO CAPACITY ON FILE", recyclingCapacity = null)
+        whenever(cpcbRecyclerRepository.findById("cpcb999")).thenReturn(java.util.Optional.of(cpcbRecycler))
+
+        val result = service.runAndSave(
+            makeCheck("300", "75", annualCapacityT = "1000").let {
+                it.copy(recycler = it.recycler.copy(cpcbRecyclerId = "cpcb999"))
+            }
+        )
+        val sub = result.subChecks.first { it.name == "Capacity ceiling check" }
+        assertEquals(CapacitySource.SELF_REPORTED, sub.capacitySource)
+        assertEquals(BigDecimal("1000"), sub.effectiveCapacityT)
+        assertTrue(sub.detail.contains("self-reported, unverified"))
     }
 
     // ── absolute batch size ───────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 package com.rorapps.eprid.service.report
 
+import com.rorapps.eprid.entity.CapacitySource
 import com.rorapps.eprid.entity.ForensicsStatus
 import com.rorapps.eprid.entity.RiskRating
 import com.rorapps.eprid.entity.SubCheckStatus
@@ -100,8 +101,10 @@ class ReportService(
             // Plausibility
             line("PLAUSIBILITY CHECK", BOLD, 11f)
             if (plausibility != null) {
+                val capacitySourceLabel = if (plausibility.capacitySource == CapacitySource.CPCB_VERIFIED)
+                    "CPCB-verified" else "self-reported, unverified"
                 line("Recovery rate:   ${statusLabel(plausibility.recoveryStatus)} — ${plausibility.recoveryDetail}")
-                line("Capacity ceiling:${statusLabel(plausibility.capacityStatus)} — ${plausibility.capacityDetail}")
+                line("Capacity ceiling:${statusLabel(plausibility.capacityStatus)} [$capacitySourceLabel] — ${plausibility.capacityDetail}")
                 line("Batch size:      ${statusLabel(plausibility.batchSizeStatus)} — ${plausibility.batchSizeDetail}")
                 line("Overall:         ${statusLabel(plausibility.overallStatus)}", BOLD)
             } else {

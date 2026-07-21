@@ -6,6 +6,12 @@ import java.time.Instant
 
 enum class SubCheckStatus { PASS, WARN, FAIL, UNVERIFIABLE }
 
+/** Which capacity figure the capacity-ceiling sub-check actually benchmarked against. Read by
+ *  [com.rorapps.eprid.service.CompositeScoringService]'s batch-to-capacity hard-disqualification
+ *  rule, which only fires when this is CPCB_VERIFIED — a SELF_REPORTED number is gameable
+ *  (a dishonest recycler can just enter a bigger number), so it must never alone hard-disqualify. */
+enum class CapacitySource { CPCB_VERIFIED, SELF_REPORTED }
+
 @Entity
 @Table(name = "plausibility_checks", schema = "eprid")
 data class PlausibilityCheck(
@@ -41,6 +47,12 @@ data class PlausibilityCheck(
 
     @Column(nullable = false, columnDefinition = "TEXT")
     val capacityDetail: String,
+
+    /** CPCB_VERIFIED only when [Recycler.cpcbRecyclerId] was linked at check time AND the linked
+     *  row had a capacity on file — otherwise SELF_REPORTED, even if a link exists. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "capacity_source", nullable = false)
+    val capacitySource: CapacitySource = CapacitySource.SELF_REPORTED,
 
     // ── Absolute batch size ───────────────────────────────────────────────────
     @Column(name = "batch_weight_t", nullable = false, precision = 12, scale = 3)

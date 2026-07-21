@@ -6,6 +6,7 @@ import com.rorapps.eprid.constants.CompositionCheckResult
 import com.rorapps.eprid.constants.CredentialCheckResult
 import com.rorapps.eprid.constants.EvidenceType
 import com.rorapps.eprid.constants.WasteStreamType
+import com.rorapps.eprid.entity.CapacitySource
 import com.rorapps.eprid.entity.ForensicsStatus
 import com.rorapps.eprid.entity.SubCheckStatus
 import com.rorapps.eprid.entity.VerificationCheck
@@ -177,11 +178,16 @@ class CompositeScoringService(
     private fun checkHardDisqualification(check: VerificationCheck): String? {
         val reasons = mutableListOf<String>()
 
+        // Only evaluates once the capacity ceiling was benchmarked against the CPCB-registered
+        // figure (not self-reported) — a self-reported number is gameable, so it must never alone
+        // hard-disqualify. Mirrors rule 1/2's "only evaluate against the verified source if
+        // linked, otherwise UNKNOWN" pattern (RegistrationValidityAtDateService).
         val plausibility = plausibilityRepository.findByCheckId(check.id!!)
         if (plausibility?.batchToCapacityRatio != null &&
+            plausibility.capacitySource == CapacitySource.CPCB_VERIFIED &&
             plausibility.batchToCapacityRatio > BigDecimal("3.0")
         ) {
-            reasons += "Certificate volume implies over 3x the recycler's registered capacity — " +
+            reasons += "Certificate volume implies over 3x the recycler's CPCB-registered capacity — " +
                 "mathematically impossible given registered capacity."
         }
 
