@@ -8,6 +8,7 @@ import com.rorapps.eprid.service.auth.AuthService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -16,7 +17,11 @@ import javax.sql.DataSource
 @RestController
 @RequestMapping("/api/v1/auth")
 @Tag(name = "Authentication", description = "Register and log in to E-PRid")
-class AuthController(private val authService: AuthService, private val dataSource: DataSource) {
+class AuthController(
+    private val authService: AuthService,
+    private val dataSource: DataSource,
+    private val environment: Environment
+) {
 
     // TEMPORARY diagnostic endpoint — remove after the persistence investigation is done.
     // Runs a raw query through the app's own live connection pool so we can compare what the
@@ -53,6 +58,8 @@ class AuthController(private val authService: AuthService, private val dataSourc
             result["envVars"] = System.getenv()
                 .filterKeys { it.contains("DATASOURCE", ignoreCase = true) || it.contains("DB_", ignoreCase = true) || it == "DATABASE_URL" }
                 .mapValues { (k, v) -> if (k.contains("PASSWORD", ignoreCase = true)) "***" else v }
+            result["springDatasourceUrlProperty"] = environment.getProperty("spring.datasource.url")
+            result["freshSystemGetenvDbUrl"] = System.getenv("DB_URL")
             return ResponseEntity.ok(result)
         }
     }
