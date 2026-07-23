@@ -75,7 +75,7 @@ class ReportService(
                 RiskRating.LOW -> "LOW RISK"
                 RiskRating.MEDIUM -> "MEDIUM RISK"
                 RiskRating.HIGH -> "HIGH RISK"
-                RiskRating.CRITICAL -> "CRITICAL RISK"
+                RiskRating.CRITICAL -> "CAUTIOUS RISK"
                 null -> "PENDING"
             }
             line("OVERALL RISK RATING: $ratingLabel", BOLD, 13f, gap = 18f)

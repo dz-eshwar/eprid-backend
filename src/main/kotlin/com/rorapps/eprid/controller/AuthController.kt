@@ -11,6 +11,7 @@ import jakarta.validation.Valid
 import org.springframework.core.env.Environment
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import javax.sql.DataSource
 
@@ -26,7 +27,10 @@ class AuthController(
     // TEMPORARY diagnostic endpoint — remove after the persistence investigation is done.
     // Runs a raw query through the app's own live connection pool so we can compare what the
     // app itself sees against what an external client sees on the "same" DB_URL.
+    // ADMIN-only: exposes DB/env metadata. Route sits under /api/v1/auth/** which is public
+    // for login/register, so this endpoint must gate itself via method security.
     @GetMapping("/_diag")
+    @PreAuthorize("hasRole('ADMIN')")
     fun diag(): ResponseEntity<Map<String, Any?>> {
         dataSource.connection.use { conn ->
             val meta = conn.metaData
@@ -46,13 +50,6 @@ class AuthController(
                 }
                 st.executeQuery("SELECT count(*) FROM eprid.users").use { rs ->
                     if (rs.next()) result["userCount"] = rs.getLong(1)
-                }
-                st.executeQuery("SELECT id, email, created_at FROM eprid.users ORDER BY created_at DESC LIMIT 5").use { rs ->
-                    val rows = mutableListOf<Map<String, Any?>>()
-                    while (rs.next()) {
-                        rows.add(mapOf("id" to rs.getString(1), "email" to rs.getString(2), "createdAt" to rs.getString(3)))
-                    }
-                    result["latestUsers"] = rows
                 }
             }
             result["envVars"] = System.getenv()

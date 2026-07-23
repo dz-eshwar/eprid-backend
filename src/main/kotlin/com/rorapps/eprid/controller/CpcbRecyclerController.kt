@@ -90,7 +90,7 @@ class CpcbRecyclerController(
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
         summary = "Recyclers whose risk band changed on the last refresh and haven't been reviewed",
-        description = "feature_spec_cpcb_directory_refresh.md §4 review gate — a Low/Medium/High/Critical " +
+        description = "feature_spec_cpcb_directory_refresh.md §4 review gate — a Low/Medium/High/Cautious " +
             "band flip stays flagged here (and does not silently show under the new band externally) " +
             "until cleared via confirm-review."
     )
